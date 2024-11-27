@@ -41,12 +41,9 @@ class Bot:
             )
 
     async def get_trades_from_orders(self, orders: list[models.OrdersHistory]):
-        """use the orders list to calculate gains and losses. between BUY and SELL orders.
-        """
+        """use the orders list to calculate gains and losses. between BUY and SELL orders."""
         for order in orders:
-            
-            
-        
+            pass
 
     async def init_tradable_pairs(self):
         print("Fetching tradable pairs")
