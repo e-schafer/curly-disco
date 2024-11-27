@@ -1,5 +1,4 @@
 from datetime import datetime
-from typing import Iterable
 
 import models
 from binance.spot import Spot
@@ -9,29 +8,23 @@ class Bot:
     def __init__(self, api_key, api_secret):
         self.client = Spot(api_key, api_secret)
 
-    def get_assets(self):
-        """_summary_
-        Returns:
-            array[dict]: [{'asset': 'BNB', 'free': '0.00000170', 'locked': '0.00000000'}]
-        """
-        return self.client.account(omitZeroBalances="true").get("balances")
-
-    def get_trades(self, pair):
-        """_summary_
-
-        Args:
-            symbol (str): pair to get trades for (e.g. "ENJUSDT")
-
-        Returns:
-        """
-        return self.client.my_trades(symbol=pair)
-
-    async def init_trades_history(self, pairs: Iterable[str]):
+    async def init_trades_history(self):
+        pairs = list(
+            map(
+                lambda x: x["symbol"],
+                list(
+                    filter(
+                        lambda y: y["quoteAsset"] == "USDT",
+                        self.client.exchange_info(permissions=["SPOT"]).get("symbols"),
+                    )
+                ),
+            )
+        )
         for pair in pairs:
             print(f"Fetching trades for {pair}")
             data = list(
                 map(
-                    lambda x: models.TradesHistory(
+                    lambda x: models.OrdersHistory(
                         id=x["id"],
                         pair=x["symbol"],
                         side="BUY" if x["isBuyer"] else "SELL",
@@ -43,11 +36,20 @@ class Bot:
                     self.client.my_trades(symbol=pair),
                 )
             )
-            await models.TradesHistory.bulk_create(
+            await models.OrdersHistory.bulk_create(
                 data, on_conflict=["id"], ignore_conflicts=True
             )
 
+    async def get_trades_from_orders(self, orders: list[models.OrdersHistory]):
+        """use the orders list to calculate gains and losses. between BUY and SELL orders.
+        """
+        for order in orders:
+            
+            
+        
+
     async def init_tradable_pairs(self):
+        print("Fetching tradable pairs")
         data = list(
             map(
                 lambda y: models.TradablePairs(
@@ -70,11 +72,7 @@ class Bot:
 
     async def first_run(self):
         await self.init_tradable_pairs()
-
-        pairs: list[str] = await models.TradablePairs.all().values_list(
-            "symbol", flat=True
-        )  # type: ignore
-        await self.init_trades_history(pairs)
+        await self.init_trades_history()
 
     def set_entry_point(self, pair, delta):
         raise NotImplementedError()
@@ -92,8 +90,8 @@ if __name__ == "__main__":
 
     asyncio.run(DB.init())
     bot = Bot(
-        api_key=os.environ["API_KEY_READONLY"],
-        api_secret=os.environ["API_SECRET_READONLY"],
+        api_key=os.environ["API_KEY_WRITE"],
+        api_secret=os.environ["API_SECRET_WRITE"],
     )
 
     asyncio.run(bot.first_run())
