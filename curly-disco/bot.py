@@ -1,4 +1,7 @@
+import time
 from datetime import datetime
+from itertools import accumulate, groupby
+from signal import siginterrupt
 
 import models
 from binance.spot import Spot
@@ -40,11 +43,6 @@ class Bot:
                 data, on_conflict=["id"], ignore_conflicts=True
             )
 
-    async def get_trades_from_orders(self, orders: list[models.OrdersHistory]):
-        """use the orders list to calculate gains and losses. between BUY and SELL orders."""
-        for order in orders:
-            pass
-
     async def init_tradable_pairs(self):
         print("Fetching tradable pairs")
         data = list(
@@ -77,6 +75,64 @@ class Bot:
     def set_exit_point(self, pair, target, trailing_delta):
         raise NotImplementedError()
 
+    async def sandbox(self):
+        trades: list[models.OrdersHistory] = await models.OrdersHistory().filter(
+            pair="ENJUSDT"
+        )
+        # pp(trades)
+        # print("---------------")
+        # merge each group of orders into a single order
+
+        for key, group in groupby(
+            trades,
+            lambda x: (
+                x.pair,
+                x.side,
+                x.timestamp,
+            ),
+        ):
+            pp(list(group))
+            models.OrdersHistory(
+                id=0,
+                pair=key[0],
+                timestamp=key[1],
+                side=key[2],
+                tokenQuantity=sum([x.tokenQuantity for x in group]),
+                usdtQuantity=sum([x.usdtQuantity for x in group]),
+            )
+
+        # parcourd merged to calculate the profit. after each sell order, the profit is calculated
+        # and a models.TradesHistory is created. before a sell order we need accumulate all the buy orders
+        # quantity = 0
+        # quote_quantity = 0
+        # orders: list[models.TradesHistory] = []
+        # first_timestamp = datetime(1970, 1, 1)
+        # side = "sell"
+        # for order in merged:
+        #     if order.side == "BUY":
+        #         quantity += order.tokenQuantity
+        #         quote_quantity += order.usdtQuantity
+        #         if side == "sell":
+        #             first_timestamp = order.timestamp
+        #             side = "buy"
+        #     else:
+        #         orders.append(
+        #             models.TradesHistory(
+        #                 pair=order.pair,
+        #                 openTimestamp=first_timestamp,
+        #                 closeTimestamp=order.timestamp,
+        #                 tokenTotalQuantity=quantity,
+        #                 buyUsdtTotalQuantity=quote_quantity,
+        #                 buyUnitPrice=quote_quantity / quantity,
+        #                 sellUsdtTotalQuantity=order.usdtQuantity,
+        #                 sellUnitPrice=order.usdtQuantity / order.tokenQuantity,
+        #             )
+        #         )
+        #         side = "sell"
+        #         quantity = 0
+        #         quote_quantity = 0
+        # pp(orders)
+
 
 if __name__ == "__main__":
     import asyncio
@@ -86,10 +142,10 @@ if __name__ == "__main__":
     from db import DB
 
     asyncio.run(DB.init())
+
     bot = Bot(
         api_key=os.environ["API_KEY_WRITE"],
         api_secret=os.environ["API_SECRET_WRITE"],
     )
-
-    asyncio.run(bot.first_run())
+    asyncio.run(bot.sandbox())
     asyncio.run(DB.close())

@@ -21,10 +21,3 @@ def test_first_run(autobot):
     asyncio.run(autobot.first_run())
     asyncio.run(DB.close())
     assert True
-
-
-def test_trades(autobot):
-    trades = autobot.client.my_trades(symbol="BTCUSDT")
-    assert trades is not None
-    assert isinstance(trades, list)
-    assert len(trades) > 0

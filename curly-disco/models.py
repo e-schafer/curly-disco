@@ -13,7 +13,7 @@ class OrdersHistory(models.Model):
     usdtQuantity = fields.DecimalField(10, 10)
 
     def __repr__(self) -> str:
-        return f"{self.pair} {self.timestamp} {self.side} {self.tokenQuantity} {self.unitPrice} {self.usdtQuantity}"
+        return f"{self.pair} {self.timestamp} {self.side} {self.unitPrice} {self.tokenQuantity} {self.usdtQuantity}"
 
 
 class TradesHistory(models.Model):
@@ -28,6 +28,9 @@ class TradesHistory(models.Model):
     buyUnitPrice = fields.DecimalField(10, 10)
     sellUsdtTotalQuantity = fields.DecimalField(10, 10)
     sellUnitPrice = fields.DecimalField(10, 10)
+
+    def __repr__(self) -> str:
+        return f"{self.pair} {self.openTimestamp} {self.closeTimestamp} {self.tokenTotalQuantity} {self.buyUsdtTotalQuantity} {self.buyUnitPrice} {self.sellUsdtTotalQuantity} {self.sellUnitPrice}"
 
 
 class Assets(models.Model):
