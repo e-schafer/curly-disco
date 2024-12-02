@@ -1,64 +1,179 @@
+from enum import StrEnum
+
 from tortoise import fields, models
 
 
-class OrdersHistory(models.Model):
+class Orders(models.Model):
     """Model to store trades history as-it from Binance API"""
 
     id = fields.IntField(pk=True)
     pair = fields.CharField(max_length=20)
     timestamp = fields.DatetimeField()
     side = fields.CharField(max_length=10)
-    unitPrice = fields.DecimalField(10, 10)
-    tokenQuantity = fields.DecimalField(10, 10)
-    usdtQuantity = fields.DecimalField(10, 10)
+    base_unit_price = fields.DecimalField(10, 10)
+    token_quantity = fields.DecimalField(10, 10)
+    quote_quantity = fields.DecimalField(10, 10)
 
     def __repr__(self) -> str:
-        return f"{self.pair} {self.timestamp} {self.side} {self.unitPrice} {self.tokenQuantity} {self.usdtQuantity}"
+        return f"{self.pair} {self.timestamp} {self.side} {self.base_unit_price} {self.token_quantity} {self.quote_quantity}"
+
+    @staticmethod
+    def nicegui_repr():
+        return [
+            {"name": "ID", "label": "id", "field": "id", "required": True},
+            {"name": "Pair", "label": "pair", "field": "pair", "required": True},
+            {"name": "Timestamp", "label": "timestamp", "field": "timestamp", "required": True},
+            {"name": "Side", "label": "side", "field": "side", "required": True},
+            {"name": "Unit Price", "label": "base_unit_price", "field": "base_unit_price", "required": True},
+            {"name": "Token Quantity", "label": "token_quantity", "field": "token_quantity", "required": True},
+            {"name": "USDT Quantity", "label": "quote_quantity", "field": "quote_quantity", "required": True},
+        ]
 
 
-class TradesHistory(models.Model):
+class Trades(models.Model):
     """Model to store trades history as-it from Binance API"""
 
     id = fields.IntField(pk=True)
     pair = fields.CharField(max_length=20)
-    openTimestamp = fields.DatetimeField()
-    closeTimestamp = fields.DatetimeField()
-    tokenTotalQuantity = fields.DecimalField(10, 10)
-    buyUsdtTotalQuantity = fields.DecimalField(10, 10)
-    buyUnitPrice = fields.DecimalField(10, 10)
-    sellUsdtTotalQuantity = fields.DecimalField(10, 10)
-    sellUnitPrice = fields.DecimalField(10, 10)
+    opened_at = fields.DatetimeField()
+    closed_at = fields.DatetimeField()
+    token_quantity = fields.DecimalField(10, 10)
+    quote_quantity = fields.DecimalField(10, 10)
+    sold_value = fields.DecimalField(10, 10)
+    gains = fields.DecimalField(10, 10)
+    gains_percentage = fields.DecimalField(10, 10)
 
     def __repr__(self) -> str:
-        return f"{self.pair} {self.openTimestamp} {self.closeTimestamp} {self.tokenTotalQuantity} {self.buyUsdtTotalQuantity} {self.buyUnitPrice} {self.sellUsdtTotalQuantity} {self.sellUnitPrice}"
+        return f"{self.pair} {self.opened_at} {self.closed_at} {self.token_quantity} {self.quote_quantity}  {self.sold_value} {self.gains} {self.gains_percentage} "
+
+    @staticmethod
+    def nicegui_repr():
+        return [
+            {"name": "ID", "label": "ID", "field": "id", "required": True},
+            {"name": "Pair", "label": "Pair", "field": "pair", "required": True},
+            {"name": "Open Timestamp", "label": "Open Timestamp", "field": "opened_at", "required": True},
+            {"name": "Close Timestamp", "label": "Close Timestamp", "field": "closed_at", "required": True},
+            {
+                "name": "Token Total Quantity",
+                "label": "Token Total Quantity",
+                "field": "token_quantity",
+                "required": True,
+            },
+            {
+                "name": "Buy USDT Total Quantity",
+                "label": "Buy USDT Total Quantity",
+                "field": "quote_quantity",
+                "required": True,
+            },
+            {
+                "name": "Sell USDT Total Quantity",
+                "label": "Sell USDT Total Quantity",
+                "field": "sold_value",
+                "required": True,
+            },
+            {"name": "gains", "label": "gains", "field": "gains", "required": True},
+            {"name": "gains Percentage", "label": "gains Percentage", "field": "gains_percentage", "required": True},
+        ]
 
 
 class Assets(models.Model):
     """Store the current wallet situation to avoid.
     As we are going to use the websocket API, and the REST API is lagging behind"""
 
-    symbol = fields.CharField(max_length=20, pk=True)
-    asset = fields.CharField(max_length=10)
-    quantity = fields.DecimalField(10, 10)
-    valuation = fields.DecimalField(10, 10)
-    createdAt = fields.DatetimeField(auto_now_add=True)
-    updatedAt = fields.DatetimeField(auto_now=True)
+    id = fields.CharField(max_length=10, pk=True)
+    token_quantity = fields.DecimalField(10, 10)
+    quote_quantity = fields.DecimalField(10, 10)
+    base_unit_price = fields.DecimalField(10, 10)
+    market_value = fields.DecimalField(10, 10)
+    gains = fields.DecimalField(10, 10)
+    gains_percentage = fields.DecimalField(10, 10)
+    opened_at = fields.DatetimeField(auto_now_add=True)
+    updated_at = fields.DatetimeField(auto_now=True)
+
+    def __repr__(self) -> str:
+        return f"{self.id} {self.token_quantity} {self.quote_quantity} {self.opened_at} {self.updated_at}"
+
+    @staticmethod
+    def nicegui_repr():
+        return [
+            {"name": "ID", "label": "id", "field": "id", "required": True},
+            {
+                "name": "Token Total Quantity",
+                "label": "token_quantity",
+                "field": "token_quantity",
+                "required": True,
+            },
+            {
+                "name": "Buy USDT Total Quantity",
+                "label": "quote_quantity",
+                "field": "quote_quantity",
+                "required": True,
+            },
+            {
+                "name": "Buy Unit Price",
+                "label": "base_unit_price",
+                "field": "base_unit_price",
+                "required": True,
+            },
+            {
+                "name": "Current USDT Value",
+                "label": "market_value",
+                "field": "market_value",
+                "required": True,
+            },
+            {
+                "name": "Current gains",
+                "label": "gains",
+                "field": "gains",
+                "required": True,
+            },
+            {
+                "name": "Current gains Percentage",
+                "label": "gains_percentage",
+                "field": "gains_percentage",
+                "required": True,
+            },
+            {
+                "name": "Open Timestamp",
+                "label": "opened_at",
+                "field": "opened_at",
+                "required": True,
+            },
+            {
+                "name": "Updated At",
+                "label": "updated_at",
+                "field": "updated_at",
+                "required": True,
+            },
+        ]
 
 
-class TradablePairs(models.Model):
+class Market(models.Model):
     """Store the tradable pairs to avoid querying the API every time.
     And will be used to blacklist some pairs that we dont want to trade on.
     """
 
-    symbol = fields.CharField(max_length=20, pk=True)
-    asset = fields.CharField(max_length=10)
-    quoteAsset = fields.CharField(max_length=10)
-    isBlacklisted = fields.BooleanField(default=False)
-    createdAt = fields.DatetimeField(auto_now_add=True)
-    updatedAt = fields.DatetimeField(auto_now=True)
+    pair = fields.CharField(max_length=20, pk=True)
+    symbol = fields.CharField(max_length=10)
+    quote_symbol = fields.CharField(max_length=10)
+    is_black_listed = fields.BooleanField(default=False)
+    created_at = fields.DatetimeField(auto_now_add=True)
+    updated_at = fields.DatetimeField(auto_now=True)
 
 
 class Settings(models.Model):
     key = fields.CharField(max_length=250, pk=True)
     value = fields.CharField(max_length=250)
-    updatedAt = fields.DatetimeField(auto_now=True)
+    updated_at = fields.DatetimeField(auto_now=True)
+
+    class Keys(StrEnum):
+        SELL_GAINS_PERCENTAGE = "sell_gains_percentage"
+        SELL_TRAILING_STOP = "sell_trailing_stop"
+        WEEKLY_DEVIATION_PERCENTAGE = "weekly_deviation_percentage"
+        BUY_AMOUNT = "buy_amount"
+        MITRAILLE_QUANTITY = "mitraille_quantity"
+        MITRAILLE_PERCENTAGE = "mitraille_percentage"
+
+    @staticmethod
+    async def get_settings(key: Keys):
+        return await Settings.get_or_none(key=key)

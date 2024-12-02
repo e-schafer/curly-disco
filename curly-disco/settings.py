@@ -1,0 +1,7 @@
+class Settings:
+    MITRAILLE_QUANTITY = 10
+    MITRAILLE_RANGE = 0.3
+
+    SELL_THRESHOLD = 0.2
+    BUY_THRESHOLD = 0.2
+    BUY_QUANTITY = 20
