@@ -1,12 +1,16 @@
+import os
+
 import models
+import watcher
 from db import DB
 from nicegui import app, ui
 
 app.on_startup(DB.init())
 app.on_disconnect(DB.close())
+_watcher = watcher.Watcher(api_key=os.environ["API_KEY_WRITE"], api_secret=os.environ["API_SECRET_WRITE"])
 
 
-@ui.page("/", title="Curly Disco")
+@ui.page("/", title="Curly Disco", response_timeout=20.0)
 async def index():
     with ui.header().classes(replace="row items-center"):
         # ui.button(on_click=lambda: left_drawer.toggle(), icon="menu").props("flat color=white")
@@ -28,6 +32,17 @@ async def index():
                 rows=await models.Assets.all().values(),
                 pagination=50,
             )
+
+        with ui.tab_panel("Open orders"):
+            order_columns = [
+                {"name": "Pair", "label": "pair", "field": "pair"},
+                {"name": "Quantity", "label": "quantity", "field": "quantity"},
+                {"name": "Current price", "label": "current", "field": "current_price"},
+                {"name": "Target price", "label": "target", "field": "target_price"},
+                {"name": "Far", "label": "far", "field": "far"},
+            ]
+            open_orders = await _watcher.buy_orders()
+            ui.table(columns=order_columns, rows=open_orders, pagination=50, row_key="pair")
         with ui.tab_panel("Trades").classes("w-full"):
             ui.label("Trades")
             trades = await models.Trades.all().values()
@@ -38,4 +53,5 @@ async def index():
             ui.label("Controls")
 
 
+ui.dark_mode(value=True)
 ui.run()

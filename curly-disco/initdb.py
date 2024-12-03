@@ -159,6 +159,7 @@ class InitDB:
         await models.Settings.bulk_create(settings, on_conflict=["key"], ignore_conflicts=True)
 
     async def first_run(self):
+        await self.init_settings()
         await self.init_market()
         await self.init_orders_and_trades()
         await self.init_assets()
@@ -175,6 +176,6 @@ if __name__ == "__main__":
         api_key=os.environ["API_KEY_WRITE"],
         api_secret=os.environ["API_SECRET_WRITE"],
     )
-    trades = asyncio.run(bot.init_settings())
+    trades = asyncio.run(bot.first_run())
     pp(trades)
     asyncio.run(DB.close())

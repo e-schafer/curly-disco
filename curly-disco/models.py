@@ -53,24 +53,9 @@ class Trades(models.Model):
             {"name": "Pair", "label": "Pair", "field": "pair", "required": True},
             {"name": "Open Timestamp", "label": "Open Timestamp", "field": "opened_at", "required": True},
             {"name": "Close Timestamp", "label": "Close Timestamp", "field": "closed_at", "required": True},
-            {
-                "name": "Token Total Quantity",
-                "label": "Token Total Quantity",
-                "field": "token_quantity",
-                "required": True,
-            },
-            {
-                "name": "Buy USDT Total Quantity",
-                "label": "Buy USDT Total Quantity",
-                "field": "quote_quantity",
-                "required": True,
-            },
-            {
-                "name": "Sell USDT Total Quantity",
-                "label": "Sell USDT Total Quantity",
-                "field": "sold_value",
-                "required": True,
-            },
+            {"name": "Token Quantity", "label": "Token Quantity", "field": "token_quantity", "required": True},
+            {"name": "Buy USDT Quantity", "label": "Buy USDT Quantity", "field": "quote_quantity", "required": True},
+            {"name": "Sell USDT Quantity", "label": "Sell USDT Quantity", "field": "sold_value", "required": True},
             {"name": "gains", "label": "gains", "field": "gains", "required": True},
             {"name": "gains Percentage", "label": "gains Percentage", "field": "gains_percentage", "required": True},
         ]
@@ -97,54 +82,14 @@ class Assets(models.Model):
     def nicegui_repr():
         return [
             {"name": "ID", "label": "id", "field": "id", "required": True},
-            {
-                "name": "Token Total Quantity",
-                "label": "token_quantity",
-                "field": "token_quantity",
-                "required": True,
-            },
-            {
-                "name": "Buy USDT Total Quantity",
-                "label": "quote_quantity",
-                "field": "quote_quantity",
-                "required": True,
-            },
-            {
-                "name": "Buy Unit Price",
-                "label": "base_unit_price",
-                "field": "base_unit_price",
-                "required": True,
-            },
-            {
-                "name": "Current USDT Value",
-                "label": "market_value",
-                "field": "market_value",
-                "required": True,
-            },
-            {
-                "name": "Current gains",
-                "label": "gains",
-                "field": "gains",
-                "required": True,
-            },
-            {
-                "name": "Current gains Percentage",
-                "label": "gains_percentage",
-                "field": "gains_percentage",
-                "required": True,
-            },
-            {
-                "name": "Open Timestamp",
-                "label": "opened_at",
-                "field": "opened_at",
-                "required": True,
-            },
-            {
-                "name": "Updated At",
-                "label": "updated_at",
-                "field": "updated_at",
-                "required": True,
-            },
+            {"name": "Token Quantity", "label": "token_quantity", "field": "token_quantity", "required": True},
+            {"name": "Buy USDT Total Quantity", "label": "quote_quantity", "field": "quote_quantity", "required": True},
+            {"name": "Buy Unit Price", "label": "base_unit_price", "field": "base_unit_price", "required": True},
+            {"name": "Current USDT Value", "label": "market_value", "field": "market_value", "required": True},
+            {"name": "Current gains", "label": "gains", "field": "gains", "required": True},
+            {"name": "Gains Percentage", "label": "gains_percentage", "field": "gains_percentage", "required": True},
+            {"name": "Open Timestamp", "label": "opened_at", "field": "opened_at", "required": True},
+            {"name": "Updated At", "label": "updated_at", "field": "updated_at", "required": True},
         ]
 
 

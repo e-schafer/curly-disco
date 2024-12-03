@@ -1,9 +1,7 @@
 import os
 from datetime import datetime
 from statistics import mean
-from turtle import position
 
-import db
 import models
 from binance.spot import Spot
 from binance.websocket.spot.websocket_stream import SpotWebsocketStreamClient
@@ -11,7 +9,7 @@ from binance.websocket.spot.websocket_stream import SpotWebsocketStreamClient
 
 class Watcher:
     def __init__(self, api_key, api_secret):
-        self.client = Spot(api_key, api_secret)
+        self.client: Spot = Spot(api_key, api_secret)
         # self.ws_client = SpotWebsocketStreamClient(
         #     on_message=self.on_message, stream_url="wss://stream.testnet.binance.vision:9443/ws"
         # )
@@ -94,6 +92,22 @@ class Watcher:
         positions.sort(key=lambda x: x["far"])
         return positions
 
+    async def buy_orders(self) -> list[dict]:
+        orders = self.client.get_open_orders()
+        opened_orders = []
+        for order in orders:
+            current_price = (self.client.ticker_price(symbol=order["symbol"]))["price"]
+            opened_orders.append(
+                {
+                    "pair": order["symbol"],
+                    "quantity": order["origQty"],
+                    "target_price": (target_price := float(order["price"])),
+                    "current_price": current_price,
+                    "far": ((float(current_price) / target_price) - 1) * 100,
+                }
+            )
+        return opened_orders
+
 
 if __name__ == "__main__":
     import asyncio
@@ -103,7 +117,7 @@ if __name__ == "__main__":
     asyncio.run(DB.init())
 
     watcher = Watcher(api_key=os.environ["API_KEY_WRITE"], api_secret=os.environ["API_SECRET_WRITE"])
-    data = asyncio.run(watcher.put_order())
+    data = asyncio.run(watcher.buy_orders())
     [print(x) for x in data]
 
     asyncio.run(DB.close())
