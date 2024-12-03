@@ -10,6 +10,9 @@ app.on_disconnect(DB.close())
 _watcher = watcher.Watcher(api_key=os.environ["API_KEY_WRITE"], api_secret=os.environ["API_SECRET_WRITE"])
 
 
+NUMBER_OF_ITEMS = 20
+
+
 @ui.page("/", title="Curly Disco", response_timeout=20.0)
 async def index():
     with ui.header().classes(replace="row items-center"):
@@ -30,7 +33,7 @@ async def index():
             ui.table(
                 columns=columns,
                 rows=await models.Assets.all().values(),
-                pagination=50,
+                pagination=NUMBER_OF_ITEMS,
             )
 
         with ui.tab_panel("Open orders"):
@@ -42,12 +45,13 @@ async def index():
                 {"name": "Far", "label": "far", "field": "far"},
             ]
             open_orders = await _watcher.buy_orders()
-            ui.table(columns=order_columns, rows=open_orders, pagination=50, row_key="pair")
+            ui.table(columns=order_columns, rows=open_orders, pagination=NUMBER_OF_ITEMS, row_key="pair")
+
         with ui.tab_panel("Trades").classes("w-full"):
             ui.label("Trades")
             trades = await models.Trades.all().values()
             trades.sort(key=lambda x: x["closed_at"], reverse=True)
-            ui.table(columns=models.Trades.nicegui_repr(), rows=trades, pagination=50, row_key="id")
+            ui.table(columns=models.Trades.nicegui_repr(), rows=trades, pagination=NUMBER_OF_ITEMS, row_key="id")
 
         with ui.tab_panel("Controls"):
             ui.label("Controls")

@@ -94,15 +94,20 @@ class Watcher:
 
     async def buy_orders(self) -> list[dict]:
         orders = self.client.get_open_orders()
+        prices = dict(
+            map(
+                lambda x: (x["symbol"], x["price"]),
+                self.client.ticker_price(symbols=[order["symbol"] for order in orders]),
+            )
+        )
         opened_orders = []
         for order in orders:
-            current_price = (self.client.ticker_price(symbol=order["symbol"]))["price"]
             opened_orders.append(
                 {
                     "pair": order["symbol"],
                     "quantity": order["origQty"],
                     "target_price": (target_price := float(order["price"])),
-                    "current_price": current_price,
+                    "current_price": (current_price := prices[order["symbol"]]),
                     "far": ((float(current_price) / target_price) - 1) * 100,
                 }
             )
