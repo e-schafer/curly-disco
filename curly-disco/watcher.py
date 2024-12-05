@@ -1,5 +1,6 @@
 import os
 from datetime import datetime
+from pprint import pp
 from statistics import mean
 
 import models
@@ -92,14 +93,18 @@ class Watcher:
         positions.sort(key=lambda x: x["far"])
         return positions
 
-    async def buy_orders(self) -> list[dict]:
-        orders = self.client.get_open_orders()
+    async def pairs_to_prices(self, pairs: list[str]) -> dict:
         prices = dict(
             map(
-                lambda x: (x["symbol"], x["price"]),
-                self.client.ticker_price(symbols=[order["symbol"] for order in orders]),
+                lambda x: (x["symbol"], float(x["price"])),
+                self.client.ticker_price(symbols=pairs),
             )
         )
+        return prices
+
+    async def buy_orders(self) -> list[dict]:
+        orders = self.client.get_open_orders()
+        prices = await self.pairs_to_prices([x["symbol"] for x in orders])
         opened_orders = []
         for order in orders:
             opened_orders.append(
@@ -113,6 +118,16 @@ class Watcher:
             )
         return opened_orders
 
+    async def get_upto_date_asset(self):
+        assets = await models.Assets().all()
+        prices = await self.pairs_to_prices([x.id for x in assets])
+        for asset in assets:
+            asset.market_value = float(asset.token_quantity) * prices[asset.id]
+            asset.gains = asset.market_value - float(asset.quote_quantity)
+            asset.gains_percentage = (asset.gains / float(asset.quote_quantity)) * 100
+        await models.Assets.bulk_update(assets, fields=["market_value", "gains", "gains_percentage", "updated_at"])
+        return await models.Assets().all().values()
+
 
 if __name__ == "__main__":
     import asyncio
@@ -122,8 +137,8 @@ if __name__ == "__main__":
     asyncio.run(DB.init())
 
     watcher = Watcher(api_key=os.environ["API_KEY_WRITE"], api_secret=os.environ["API_SECRET_WRITE"])
-    data = asyncio.run(watcher.buy_orders())
-    [print(x) for x in data]
+
+    pp(asyncio.run(watcher.get_upto_date_asset()))
 
     asyncio.run(DB.close())
 

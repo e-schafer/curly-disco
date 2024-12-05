@@ -20,13 +20,31 @@ class Orders(models.Model):
     @staticmethod
     def nicegui_repr():
         return [
-            {"name": "ID", "label": "id", "field": "id", "required": True},
-            {"name": "Pair", "label": "pair", "field": "pair", "required": True},
-            {"name": "Timestamp", "label": "timestamp", "field": "timestamp", "required": True},
+            {"name": "ID", "label": "id", "field": "id", "sortable": True, "required": True},
+            {"name": "Pair", "label": "pair", "field": "pair", "sortable": True, "required": True},
+            {"name": "Timestamp", "label": "timestamp", "field": "timestamp", "sortable": True, "required": True},
             {"name": "Side", "label": "side", "field": "side", "required": True},
-            {"name": "Unit Price", "label": "base_unit_price", "field": "base_unit_price", "required": True},
-            {"name": "Token Quantity", "label": "token_quantity", "field": "token_quantity", "required": True},
-            {"name": "USDT Quantity", "label": "quote_quantity", "field": "quote_quantity", "required": True},
+            {
+                "name": "Unit Price",
+                "label": "base_unit_price",
+                "sortable": True,
+                "field": "base_unit_price",
+                "required": True,
+            },
+            {
+                "name": "Token Quantity",
+                "label": "token_quantity",
+                "field": "token_quantity",
+                "sortable": True,
+                "required": True,
+            },
+            {
+                "name": "USDT Quantity",
+                "label": "quote_quantity",
+                "field": "quote_quantity",
+                "sortable": True,
+                "required": True,
+            },
         ]
 
 
@@ -49,15 +67,15 @@ class Trades(models.Model):
     @staticmethod
     def nicegui_repr():
         return [
-            {"name": "ID", "label": "ID", "field": "id", "required": True},
-            {"name": "Pair", "label": "Pair", "field": "pair", "required": True},
-            {"name": "Open Timestamp", "label": "Open Timestamp", "field": "opened_at", "required": True},
-            {"name": "Close Timestamp", "label": "Close Timestamp", "field": "closed_at", "required": True},
-            {"name": "Token Quantity", "label": "Token Quantity", "field": "token_quantity", "required": True},
-            {"name": "Buy USDT Quantity", "label": "Buy USDT Quantity", "field": "quote_quantity", "required": True},
-            {"name": "Sell USDT Quantity", "label": "Sell USDT Quantity", "field": "sold_value", "required": True},
-            {"name": "gains", "label": "gains", "field": "gains", "required": True},
-            {"name": "gains Percentage", "label": "gains Percentage", "field": "gains_percentage", "required": True},
+            {"name": "id", "label": "ID", "field": "id", "required": True},
+            {"name": "pair", "label": "Pair", "field": "pair", "sortable": True, "required": True},
+            {"name": "opened_at", "label": "Open Timestamp", "field": "opened_at", "sortable": True},
+            {"name": "closed_at", "label": "Close Timestamp", "field": "closed_at", "sortable": True},
+            {"name": "token_quantity", "label": "Token Quantity", "field": "token_quantity", "sortable": True},
+            {"name": "quote_quantity", "label": "Buy USDT Quantity", "field": "quote_quantity", "sortable": True},
+            {"name": "sold_value", "label": "Sell USDT Quantity", "field": "sold_value", "sortable": True},
+            {"name": "gains", "label": "Gains", "field": "gains", "sortable": True, "required": True},
+            {"name": "gains_percentage", "label": "Gains Percentage", "field": "gains_percentage", "sortable": True},
         ]
 
 
@@ -81,20 +99,15 @@ class Assets(models.Model):
     @staticmethod
     def nicegui_repr():
         return [
-            {"name": "ID", "label": "ID", "field": "id", "required": True},
-            {"name": "Token Quantity", "label": "Token Quantity", "field": "token_quantity", "required": True},
-            {
-                "name": "Buy USDT Total Quantity",
-                "label": "Buy USDT Total Quantity",
-                "field": "quote_quantity",
-                "required": True,
-            },
-            {"name": "Buy Unit Price", "label": "Buy Unit Price", "field": "base_unit_price", "required": True},
-            {"name": "Current USDT Value", "label": "Current USDT Value", "field": "market_value", "required": True},
-            {"name": "Current gains", "label": "Current gains", "field": "gains", "required": True},
-            {"name": "Gains Percentage", "label": "Gains Percentage", "field": "gains_percentage", "required": True},
-            {"name": "Open Timestamp", "label": "Open Timestamp", "field": "opened_at", "required": True},
-            {"name": "Updated At", "label": "Updated At", "field": "updated_at", "required": True},
+            {"name": "id", "label": "ID", "field": "id", "sortable": True, "required": True},
+            {"name": "token_quantity", "label": "Token Quantity", "field": "token_quantity", "required": True},
+            {"name": "quote_quantity", "label": "Buy USDT Quantity", "field": "quote_quantity", "sortable": True},
+            {"name": "base_unit_price", "label": "Buy Unit Price", "field": "base_unit_price", "required": True},
+            {"name": "market_value", "label": "Current USDT Value", "field": "market_value", "sortable": True},
+            {"name": "gains", "label": "Current gains", "field": "gains", "sortable": True},
+            {"name": "gains_percentage", "label": "Gains Percentage", "field": "gains_percentage", "sortable": True},
+            {"name": "opened_at", "label": "Open Timestamp", "field": "opened_at", "sortable": True},
+            {"name": "updated_at", "label": "Updated At", "field": "updated_at", "sortable": True, "required": True},
         ]
 
 
