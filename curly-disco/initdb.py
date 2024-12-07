@@ -155,6 +155,7 @@ class InitDB:
             models.Settings(key=models.Settings.Keys.BUY_AMOUNT, value=20),
             models.Settings(key=models.Settings.Keys.MITRAILLE_PERCENTAGE, value=20),
             models.Settings(key=models.Settings.Keys.MITRAILLE_QUANTITY, value=20),
+            models.Settings(key=models.Settings.Keys.LESSPER_DEFAULT, value=20),
         ]
         await models.Settings.bulk_create(settings, on_conflict=["key"], ignore_conflicts=True)
 

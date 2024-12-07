@@ -63,9 +63,24 @@ class Watcher:
             pass
 
     async def get_lessper(self):
-        lessper = float((await models.Settings.get(key=models.Settings.Keys.MITRAILLE_PERCENTAGE)).value) / 100
-        bitcoin_variation = self.client.ui_klines(symbol="BTCUSDT", interval="1d", limit=1)
-
+        lessper = float((await models.Settings.get(key=models.Settings.Keys.LESSPER_DEFAULT)).value)
+        bitcoin_variation = float(self.client.ticker_24hr(symbol="BTCUSDT")["priceChangePercent"])
+        if bitcoin_variation >= -2.5:
+            lessper += 2.5
+        elif bitcoin_variation >= -4.5:
+            lessper += 5
+        elif bitcoin_variation >= -7.5:
+            lessper += 10
+        elif bitcoin_variation >= -9.5:
+            lessper += 15
+        elif bitcoin_variation >= -13:
+            lessper += 20
+        elif bitcoin_variation >= -16:
+            lessper += 25
+        elif bitcoin_variation >= -20:
+            lessper += 30
+        else:
+            lessper += 35
         return lessper
 
     async def put_order(self):
@@ -102,7 +117,7 @@ class Watcher:
         )
         return prices
 
-    async def buy_orders(self) -> list[dict]:
+    async def get_opened_buy_orders(self) -> list[dict]:
         orders = self.client.get_open_orders()
         prices = await self.pairs_to_prices([x["symbol"] for x in orders])
         opened_orders = []
@@ -137,8 +152,8 @@ if __name__ == "__main__":
     asyncio.run(DB.init())
 
     watcher = Watcher(api_key=os.environ["API_KEY_WRITE"], api_secret=os.environ["API_SECRET_WRITE"])
-
-    pp(asyncio.run(watcher.get_upto_date_asset()))
+    pp(watcher.client.ticker_24hr(symbol="BTCUSDT"))
+    # pp(asyncio.run())
 
     asyncio.run(DB.close())
 

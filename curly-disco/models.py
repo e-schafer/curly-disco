@@ -136,6 +136,7 @@ class Settings(models.Model):
         BUY_AMOUNT = "buy_amount"
         MITRAILLE_QUANTITY = "mitraille_quantity"
         MITRAILLE_PERCENTAGE = "mitraille_percentage"
+        LESSPER_DEFAULT = "lessper_default"
 
     @staticmethod
     async def get_settings(key: Keys):
