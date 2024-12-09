@@ -1,54 +1,18 @@
 import os
 
+import initdb
 import models
 import watcher
 from db import DB
 from nicegui import app, ui
+from views.slots import Slots
 
 app.on_startup(DB.init())
 app.on_disconnect(DB.close())
 _watcher = watcher.Watcher(api_key=os.environ["API_KEY_WRITE"], api_secret=os.environ["API_SECRET_WRITE"])
-
+_initdb = initdb.InitDB(api_key=os.environ["API_KEY_WRITE"], api_secret=os.environ["API_SECRET_WRITE"])
 
 NUMBER_OF_ITEMS = 20
-
-
-def slot_link():
-    return """
-    <q-td :props="props">
-        <a :href="https://fr.tradingview.com/chart/?symbol=BINANCE:props.value">{0}</a>
-    </q-td>
-    """.format("{{ props.value }}")
-
-
-def slot_red_green(col_name: str, symbol: str = "%"):
-    return """
-    <q-td align="middle">
-        <q-badge key="{0}" :props="props" outline  :color="props.value < 0 ? 'red':'green'">
-            {1} {2}
-        </q-badge>
-    </q-td>
-    """.format(col_name, "{{props.value.toFixed(2)}}", symbol)
-
-
-def slot_timestamp(col_name: str):
-    return """
-    <q-td align="middle">
-        <q-badge key="{0}" :props="props" outline>
-            {1}
-        </q-badge>
-    </q-td>
-    """.format(col_name, "{{typeof(props.value)}}")
-
-
-def slot_far(col_name: str):
-    return """
-    <q-td align="middle">
-        <q-badge key="{0}" :props="props" outline  :color="props.value < 0 ? 'red':'green'">
-            {{props.value.toFixed(2)}} %
-        </q-badge>
-    </q-td>
-    """.format(col_name)
 
 
 @ui.refreshable
@@ -66,6 +30,7 @@ async def panel_asset():
         with ui.card().props("flat bordered"):
             ui.label("Liquidity available")
             ui.label("1000$")
+
     ui.label("Current assets")
     with ui.table(
         columns=models.Assets.nicegui_repr(),
@@ -73,17 +38,9 @@ async def panel_asset():
         row_key="id",
         pagination=NUMBER_OF_ITEMS,
     ) as home_table:
-        home_table.add_slot(
-            "body-cell-id",
-            """
-            <q-td :props="props">
-                <a :href="props.value">{{ props.value }}</a>
-            </q-td>
-            """,
-        )
         home_table.add_slot("loading", "True")
-        home_table.add_slot("body-cell-gains", slot_red_green("gains", "$"))
-        home_table.add_slot("body-cell-gains_percentage", slot_red_green("gains_percentage", "%"))
+        home_table.add_slot("body-cell-gains", Slots.slot_red_green("gains", "$"))
+        home_table.add_slot("body-cell-gains_percentage", Slots.slot_red_green("gains_percentage", "%"))
         # home_table.add_slot("body-cell-updated_at", slot_timestamp("updated_at"))
 
 
@@ -107,8 +64,26 @@ async def panel_trades():
     with ui.table(
         columns=models.Trades.nicegui_repr(), rows=trades, pagination=NUMBER_OF_ITEMS, row_key="id"
     ) as trades_table:
-        trades_table.add_slot("body-cell-gains", slot_red_green("gains", "$"))
-        trades_table.add_slot("body-cell-gains_percentage", slot_red_green("gains_percentage", "%"))
+        trades_table.add_slot("body-cell-gains", Slots.slot_red_green("gains", "$"))
+        trades_table.add_slot("body-cell-gains_percentage", Slots.slot_red_green("gains_percentage", "%"))
+
+
+async def manual_update_assets():
+    ui.notify("Updating assets...")
+    await _initdb.init_assets()
+    ui.notify("Assets updated!")
+
+
+async def manual_update_trades():
+    ui.notify("Updating trades...")
+    await _initdb.init_orders_and_trades()
+    ui.notify("Trades updated!")
+
+
+async def manual_update_market():
+    ui.notify("Updating market...")
+    await _initdb.init_market()
+    ui.notify("Market updated!")
 
 
 @ui.page("/", title="Curly Disco", response_timeout=20.0)
@@ -128,6 +103,7 @@ async def index():
         with ui.tab_panel("Home"):
             ui.button("Refresh", on_click=panel_asset.refresh)
             await panel_asset()
+
         with ui.tab_panel("Open orders"):
             ui.button("Refresh", on_click=panel_open_orders.refresh)
             await panel_open_orders()
@@ -135,9 +111,13 @@ async def index():
         with ui.tab_panel("Trades").classes("w-full"):
             ui.button("Refresh", on_click=panel_trades.refresh)
             await panel_trades()
+
         with ui.tab_panel("Controls"):
             ui.label("Controls")
+            ui.button("Resync assets", on_click=lambda: manual_update_assets())
+            ui.button("Resync trades", on_click=lambda: manual_update_trades())
+            ui.button("Resync market", on_click=lambda: manual_update_market())
 
 
 ui.dark_mode(value=True)
-ui.run()
+ui.run(reload=False)

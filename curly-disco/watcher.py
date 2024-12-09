@@ -119,28 +119,30 @@ class Watcher:
 
     async def get_opened_buy_orders(self) -> list[dict]:
         orders = self.client.get_open_orders()
-        prices = await self.pairs_to_prices([x["symbol"] for x in orders])
         opened_orders = []
-        for order in orders:
-            opened_orders.append(
-                {
-                    "pair": order["symbol"],
-                    "quantity": order["origQty"],
-                    "target_price": (target_price := float(order["price"])),
-                    "current_price": (current_price := prices[order["symbol"]]),
-                    "far": ((float(current_price) / target_price) - 1) * 100,
-                }
-            )
+        if orders:
+            prices = await self.pairs_to_prices([x["symbol"] for x in orders])
+            for order in orders:
+                opened_orders.append(
+                    {
+                        "pair": order["symbol"],
+                        "quantity": order["origQty"],
+                        "target_price": (target_price := float(order["price"])),
+                        "current_price": (current_price := prices[order["symbol"]]),
+                        "far": ((float(current_price) / target_price) - 1) * 100,
+                    }
+                )
         return opened_orders
 
     async def get_upto_date_asset(self):
         assets = await models.Assets().all()
-        prices = await self.pairs_to_prices([x.id for x in assets])
-        for asset in assets:
-            asset.market_value = float(asset.token_quantity) * prices[asset.id]
-            asset.gains = asset.market_value - float(asset.quote_quantity)
-            asset.gains_percentage = (asset.gains / float(asset.quote_quantity)) * 100
-        await models.Assets.bulk_update(assets, fields=["market_value", "gains", "gains_percentage", "updated_at"])
+        if assets:
+            prices = await self.pairs_to_prices([x.id for x in assets])
+            for asset in assets:
+                asset.market_value = float(asset.token_quantity) * prices[asset.id]
+                asset.gains = asset.market_value - float(asset.quote_quantity)
+                asset.gains_percentage = (asset.gains / float(asset.quote_quantity)) * 100
+            await models.Assets.bulk_update(assets, fields=["market_value", "gains", "gains_percentage", "updated_at"])
         return await models.Assets().all().values()
 
 

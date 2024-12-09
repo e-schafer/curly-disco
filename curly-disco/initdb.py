@@ -14,6 +14,8 @@ class InitDB:
         )
 
     async def init_orders_and_trades(self):
+        await models.Orders.all().delete()
+        await models.Trades.all().delete()
         pairs = list(
             map(
                 lambda x: x["symbol"],
@@ -50,6 +52,7 @@ class InitDB:
 
     async def init_market(self):
         """_summary_"""
+        await models.Market.all().delete()
         print("Fetching tradable pairs")
         data = list(
             map(
@@ -110,6 +113,7 @@ class InitDB:
         return trades
 
     async def init_assets(self):
+        await models.Assets.all().delete()
         pairs = list(
             map(
                 lambda y: f"{y['asset']}USDT",
