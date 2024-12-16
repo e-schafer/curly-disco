@@ -24,27 +24,9 @@ class Orders(models.Model):
             {"name": "Pair", "label": "pair", "field": "pair", "sortable": True, "required": True},
             {"name": "Timestamp", "label": "timestamp", "field": "timestamp", "sortable": True, "required": True},
             {"name": "Side", "label": "side", "field": "side", "required": True},
-            {
-                "name": "Unit Price",
-                "label": "base_unit_price",
-                "sortable": True,
-                "field": "base_unit_price",
-                "required": True,
-            },
-            {
-                "name": "Token Quantity",
-                "label": "token_quantity",
-                "field": "token_quantity",
-                "sortable": True,
-                "required": True,
-            },
-            {
-                "name": "USDT Quantity",
-                "label": "quote_quantity",
-                "field": "quote_quantity",
-                "sortable": True,
-                "required": True,
-            },
+            {"name": "Unit Price", "label": "base_unit_price", "sortable": True, "field": "base_unit_price"},
+            {"name": "Token Quantity", "label": "token_quantity", "field": "token_quantity", "sortable": True},
+            {"name": "USDT Quantity", "label": "quote_quantity", "field": "quote_quantity", "sortable": True},
         ]
 
 
@@ -119,6 +101,10 @@ class Market(models.Model):
     pair = fields.CharField(max_length=20, pk=True)
     symbol = fields.CharField(max_length=10)
     quote_symbol = fields.CharField(max_length=10)
+    min_price = fields.DecimalField(10, 10)
+    tick_price = fields.DecimalField(10, 10)
+    min_quantity = fields.DecimalField(10, 10)
+    tick_quantity = fields.DecimalField(10, 10)
     is_black_listed = fields.BooleanField(default=False)
     created_at = fields.DatetimeField(auto_now_add=True)
     updated_at = fields.DatetimeField(auto_now=True)

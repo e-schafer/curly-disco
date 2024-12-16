@@ -1,3 +1,4 @@
+import asyncio
 import os
 
 import initdb
@@ -7,16 +8,36 @@ from db import DB
 from nicegui import app, ui
 from views.slots import Slots
 
-app.on_startup(DB.init())
-app.on_disconnect(DB.close())
-_watcher = watcher.Watcher(api_key=os.environ["API_KEY_WRITE"], api_secret=os.environ["API_SECRET_WRITE"])
-_initdb = initdb.InitDB(api_key=os.environ["API_KEY_WRITE"], api_secret=os.environ["API_SECRET_WRITE"])
-
 NUMBER_OF_ITEMS = 20
 
 
+_initdb = initdb.InitDB(api_key=os.environ["API_KEY_WRITE"], api_secret=os.environ["API_SECRET_WRITE"])
+_watcher = watcher.Watcher(api_key=os.environ["API_KEY_WRITE"], api_secret=os.environ["API_SECRET_WRITE"])
+
+
+@app.on_startup
+async def startup():
+    await DB.init()
+    await _initdb.init_settings()
+    await _initdb.init_market()
+    await _initdb.init_assets()
+    await _initdb.init_orders_and_trades()
+    await _watcher.strat_loop_compute_entry()
+    await _watcher.strat_loop_compute_exit()
+
+
+@app.on_exception
+async def error(error: Exception):
+    ui.notify(str(error))
+
+
+@app.on_shutdown
+async def shutdown():
+    await DB.close()
+
+
 @ui.refreshable
-async def panel_asset():
+async def panel_home() -> None:
     with ui.row():
         with ui.card().props("flat bordered"):
             ui.label("Total value")
@@ -30,11 +51,12 @@ async def panel_asset():
         with ui.card().props("flat bordered"):
             ui.label("Liquidity available")
             ui.label("1000$")
-
     ui.label("Current assets")
+    await _watcher.update_assets_gains()
+    assets = await models.Assets.all().values()
     with ui.table(
         columns=models.Assets.nicegui_repr(),
-        rows=await _watcher.get_upto_date_asset(),
+        rows=assets,
         row_key="id",
         pagination=NUMBER_OF_ITEMS,
     ) as home_table:
@@ -45,7 +67,7 @@ async def panel_asset():
 
 
 @ui.refreshable
-async def panel_open_orders():
+async def panel_open_orders() -> None:
     order_columns = [
         {"name": "Pair", "label": "pair", "field": "pair", "sortable": True},
         {"name": "Quantity", "label": "quantity", "field": "quantity", "sortable": True},
@@ -58,7 +80,7 @@ async def panel_open_orders():
 
 
 @ui.refreshable
-async def panel_trades():
+async def panel_trades() -> None:
     trades = await models.Trades.all().values()
     trades.sort(key=lambda x: x["closed_at"], reverse=True)
     with ui.table(
@@ -74,12 +96,6 @@ async def manual_update_assets():
     ui.notify("Assets updated!")
 
 
-async def manual_update_trades():
-    ui.notify("Updating trades...")
-    await _initdb.init_orders_and_trades()
-    ui.notify("Trades updated!")
-
-
 async def manual_update_market():
     ui.notify("Updating market...")
     await _initdb.init_market()
@@ -93,29 +109,20 @@ async def index():
         with ui.tabs() as tabs:
             ui.tab("Home")
             ui.tab("Open orders")
-            ui.tab("Trades")
             ui.tab("Controls")
-
-    # with ui.left_drawer().classes("bg-blue-100") as left_drawer:
-    #     ui.label("Side menu")
-
     with ui.tab_panels(tabs, value="Home"):
         with ui.tab_panel("Home"):
-            ui.button("Refresh", on_click=panel_asset.refresh)
-            await panel_asset()
-
+            ui.button("Refresh", on_click=panel_home.refresh)
+            await panel_home()
+            ui.button("Refresh", on_click=panel_trades.refresh)
+            await panel_trades()
         with ui.tab_panel("Open orders"):
             ui.button("Refresh", on_click=panel_open_orders.refresh)
             await panel_open_orders()
-
-        with ui.tab_panel("Trades").classes("w-full"):
-            ui.button("Refresh", on_click=panel_trades.refresh)
-            await panel_trades()
-
         with ui.tab_panel("Controls"):
             ui.label("Controls")
             ui.button("Resync assets", on_click=lambda: manual_update_assets())
-            ui.button("Resync trades", on_click=lambda: manual_update_trades())
+            # ui.button("Resync trades", on_click=lambda: manual_update_trades())
             ui.button("Resync market", on_click=lambda: manual_update_market())
 
 

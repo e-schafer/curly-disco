@@ -13,22 +13,26 @@ class InitDB:
             api_secret,
         )
 
-    async def init_orders_and_trades(self):
+    async def init_orders_and_trades(self, selected_pairs: list[str] = []):
         await models.Orders.all().delete()
         await models.Trades.all().delete()
-        pairs = list(
-            map(
-                lambda x: x["symbol"],
-                list(
-                    filter(
-                        lambda y: y["quoteAsset"] == "USDT",
-                        self.client.exchange_info(permissions=["SPOT"]).get("symbols"),
-                    )
-                ),
+        pairs = (
+            selected_pairs
+            if selected_pairs
+            else list(
+                map(
+                    lambda x: x["symbol"],
+                    list(
+                        filter(
+                            lambda y: y["quoteAsset"] == "USDT",
+                            self.client.exchange_info(permissions=["SPOT"]).get("symbols"),
+                        )
+                    ),
+                )
             )
         )
+
         for pair in pairs:
-            print(f"Fetching orders for {pair}")
             data = list(
                 map(
                     lambda x: models.Orders(
@@ -43,35 +47,13 @@ class InitDB:
                     list(filter(lambda x: x["status"] == "FILLED", self.client.get_orders(symbol=pair))),
                 )
             )
+            print(f"Orders found {len(data)} for {pair}")
             await models.Orders.bulk_create(data, on_conflict=["id"], ignore_conflicts=True)
             await models.Trades.bulk_create(
                 objects=await self.__init_trades_history(data),
                 on_conflict=["pair", "opened_at", "closed_at"],
                 ignore_conflicts=True,
             )
-
-    async def init_market(self):
-        """_summary_"""
-        await models.Market.all().delete()
-        print("Fetching tradable pairs")
-        data = list(
-            map(
-                lambda y: models.Market(
-                    pair=y["symbol"],
-                    symbol=y["baseAsset"],
-                    quote_symbol=y["quoteAsset"],
-                ),
-                filter(
-                    lambda x: x["quoteAsset"] == "USDT"
-                    and x["baseAsset"] not in ("USDT", "TUSD", "USDC", "USDP")
-                    and x["allowTrailingStop"]
-                    and x["isSpotTradingAllowed"]
-                    and x["status"] == "TRADING",
-                    self.client.exchange_info(permissions=["SPOT"]).get("symbols"),
-                ),
-            )
-        )
-        await models.Market.bulk_create(data, on_conflict=["symbol"], ignore_conflicts=True)
 
     async def __init_trades_history(self, orders: list[models.Orders]) -> list[models.Trades]:
         """_summary_
@@ -90,10 +72,11 @@ class InitDB:
         orders.sort(key=lambda x: x.timestamp)
 
         for order in orders:
-            print(order)
             if order.side == "BUY":
                 BQuoteQuantity += order.quote_quantity
                 Btoken_quantity += order.token_quantity
+                if opened_at == datetime(1970, 1, 1):
+                    opened_at = order.timestamp
             else:
                 trades.append(
                     models.Trades(
@@ -110,7 +93,45 @@ class InitDB:
                         ),
                     ),
                 )
+                BQuoteQuantity = 0
+                Btoken_quantity = 0
+                opened_at = datetime(1970, 1, 1)
         return trades
+
+    async def init_market(self):
+        """_summary_"""
+
+        def extract_filters(filters: list[dict]):
+            filterPrice = list(filter(lambda x: x["filterType"] == "PRICE_FILTER", filters))[0]
+            filterQuantity = list(filter(lambda x: x["filterType"] == "LOT_SIZE", filters))[0]
+            return {
+                "min_price": float(filterPrice["minPrice"]),
+                "tick_price": float(filterPrice["tickSize"]),
+                "min_quantity": float(filterQuantity["minQty"]),
+                "tick_quantity": float(filterQuantity["stepSize"]),
+            }
+
+        await models.Market.all().delete()
+        data = list(
+            map(
+                lambda y: models.Market(
+                    pair=y["symbol"],
+                    symbol=y["baseAsset"],
+                    quote_symbol=y["quoteAsset"],
+                    **extract_filters(y["filters"]),
+                ),
+                filter(
+                    lambda x: x["quoteAsset"] == "USDT"
+                    and x["baseAsset"] not in ("USDT", "TUSD", "USDC", "USDP")
+                    and x["allowTrailingStop"]
+                    and x["isSpotTradingAllowed"]
+                    and x["status"] == "TRADING",
+                    self.client.exchange_info(permissions=["SPOT"]).get("symbols"),
+                ),
+            )
+        )
+        print(f"Market found {len(data)} pairs")
+        await models.Market.bulk_create(data, on_conflict=["symbol"], ignore_conflicts=True)
 
     async def init_assets(self):
         await models.Assets.all().delete()
@@ -145,6 +166,7 @@ class InitDB:
                 token_quantity=token_quantity,
                 quote_quantity=quote_quantity,
                 base_unit_price=quote_quantity / token_quantity,
+                current_unit_price=current_unit_price,
                 market_value=token_quantity * current_unit_price,
                 gains=token_quantity * current_unit_price - quote_quantity,
                 gains_percentage=((token_quantity * current_unit_price) / quote_quantity - 1) * 100,
@@ -181,6 +203,6 @@ if __name__ == "__main__":
         api_key=os.environ["API_KEY_WRITE"],
         api_secret=os.environ["API_SECRET_WRITE"],
     )
-    trades = asyncio.run(bot.first_run())
-    pp(trades)
+    asyncio.run(bot.first_run())
+
     asyncio.run(DB.close())
