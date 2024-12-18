@@ -1,4 +1,4 @@
-import asyncio
+import importlib.metadata
 import os
 
 import initdb
@@ -8,6 +8,8 @@ from db import DB
 from nicegui import app, ui
 from views.slots import Slots
 
+# VERSION = importlib.metadata.version("curly-disco")
+VERSION = "0.1.0"
 NUMBER_OF_ITEMS = 20
 
 
@@ -21,9 +23,9 @@ async def startup():
     await _initdb.init_settings()
     await _initdb.init_market()
     await _initdb.init_assets()
-    await _initdb.init_orders_and_trades()
-    await _watcher.strat_loop_compute_entry()
-    await _watcher.strat_loop_compute_exit()
+    # await _initdb.init_orders_and_trades()
+    _watcher.loop_entries()  # type: ignore
+    _watcher.loop_exit()  # type: ignore
 
 
 @app.on_exception
@@ -38,19 +40,23 @@ async def shutdown():
 
 @ui.refreshable
 async def panel_home() -> None:
+    liquidity = await _watcher.get_liquidity()
     with ui.row():
         with ui.card().props("flat bordered"):
-            ui.label("Total value")
-            ui.label("1000$")
-        with ui.card().props("flat bordered"):
             ui.label("Total gains")
-            ui.label("1000$")
+            ui.label(f"{liquidity['total_gains']}$")
+        with ui.card().props("flat bordered"):
+            ui.label("Market value")
+            ui.label(f"{liquidity['market_value']}$")
+        with ui.card().props("flat bordered"):
+            ui.label("Liquidity engaged")
+            ui.label(f"{liquidity['bought']}$")
         with ui.card().props("flat bordered"):
             ui.label("Liquidity locked")
-            ui.label("1000$")
+            ui.label(f"{liquidity['locked']}$")
         with ui.card().props("flat bordered"):
             ui.label("Liquidity available")
-            ui.label("1000$")
+            ui.label(f"{liquidity['free']}$")
     ui.label("Current assets")
     await _watcher.update_assets_gains()
     assets = await models.Assets.all().values()
@@ -105,11 +111,11 @@ async def manual_update_market():
 @ui.page("/", title="Curly Disco", response_timeout=20.0)
 async def index():
     with ui.header().classes(replace="row items-center"):
-        # ui.button(on_click=lambda: left_drawer.toggle(), icon="menu").props("flat color=white")
         with ui.tabs() as tabs:
             ui.tab("Home")
             ui.tab("Open orders")
             ui.tab("Controls")
+        ui.label(f"Curly Disco {VERSION}")
     with ui.tab_panels(tabs, value="Home"):
         with ui.tab_panel("Home"):
             ui.button("Refresh", on_click=panel_home.refresh)

@@ -1,14 +1,18 @@
 import asyncio
 import os
 from datetime import datetime
+from itertools import chain
+from pprint import pp
+from re import L
 from statistics import mean
 
 import models
+import tortoise.functions as tf
 from binance.error import ClientError
 from binance.spot import Spot
 from binance.websocket.spot.websocket_stream import SpotWebsocketStreamClient
 from db import DB
-from fastapi_utilities import repeat_every
+from fastapi_utilities import repeat_at
 
 
 class Watcher:
@@ -132,7 +136,10 @@ class Watcher:
         positions.sort(key=lambda x: x["far"])
         return positions
 
-    @repeat_every(seconds=60 * 60 * 24)  # 24 hours
+    @repeat_at(cron="1 0 * * *")  # every day 00:01
+    def loop_entries(self):
+        asyncio.run(self.strat_loop_compute_entry())
+
     async def strat_loop_compute_entry(self, pairs: list[str] = []):
         print(f"Strat loop {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         await self.cancel_buy_orders()
@@ -194,10 +201,14 @@ class Watcher:
                 asset.gains_percentage = (asset.gains / float(asset.quote_quantity)) * 100
             await models.Assets.bulk_update(assets, fields=["market_value", "gains", "gains_percentage", "updated_at"])
 
-    @repeat_every(seconds=60 * 5)  # 5 minutes
+    @repeat_at(cron="*/5 * * * *")
+    def loop_exit(self):
+        asyncio.run(self.strat_loop_compute_exit())
+
     async def strat_loop_compute_exit(self):
         print(f"Strat loop exit {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         await self.update_assets_gains()
+        await self.delist_exit()
         assets = await models.Assets().all()
         sell_gains_percentage = float((await models.Settings.get(key=models.Settings.Keys.SELL_GAINS_PERCENTAGE)).value)
         sell_trailing_stop = float((await models.Settings.get(key=models.Settings.Keys.SELL_TRAILING_STOP)).value)
@@ -215,6 +226,58 @@ class Watcher:
                     )
                 except ClientError as e:
                     print(f"Order Refused: {asset.id} code={e.error_code}, message={e.error_message}")
+        return True
+
+    async def delist_exit(self):
+        delist = self.client.delist_schedule_symbols()
+        if not delist:
+            return
+        symbols = list(chain(*list(map(lambda x: x["symbols"], delist))))
+        for symbol in symbols:
+            if market := await models.Market.get_or_none(pair=symbol):
+                market.is_black_listed = True
+                await market.save()
+            try:
+                self.client.cancel_open_orders(symbol=symbol)
+            except ClientError as err:
+                print(f"Delist: Failed to cancel orders on {symbol}.{err.error_code} {err.error_message}")
+            if asset := await models.Assets.get_or_none(id=symbol):
+                try:
+                    self.client.new_order(
+                        symbol=symbol,
+                        side="SELL",
+                        type="MARKET",
+                        quantity=asset.token_quantity,
+                    )
+                    print(f"Delist: emergency sell on {symbol}")
+                except ClientError as err:
+                    print(f"Delist: Failed to sell on {symbol}.{err.error_code} {err.error_message}")
+
+    async def get_liquidity(self):
+        liquidity = {
+            "locked": 0.0,
+            "free": 0.0,
+            "bought": 0.0,
+            "market_value": 0.0,
+            "total_gains": 0.0,
+        }
+        asset = (
+            await models.Assets.annotate(
+                crypto_bought=tf.Sum("quote_quantity"),
+                market_value=tf.Sum("market_value"),
+            )
+            .first()
+            .values()
+        )
+        trades = await models.Trades.annotate(gains=tf.Sum("gains")).first().values()
+        if trades:
+            liquidity["total_gains"] = float(trades["gains"])
+        liquidity["bought"] = float(asset["crypto_bought"])
+        liquidity["market_value"] = float(asset["market_value"]) + liquidity["free"] + liquidity["locked"]
+        if usdt := self.client.user_asset(asset="USDT"):
+            liquidity["locked"] = float(usdt["locked"])
+            liquidity["free"] = float(usdt["free"])
+        return liquidity
 
 
 if __name__ == "__main__":
@@ -222,7 +285,5 @@ if __name__ == "__main__":
 
     watcher = Watcher(api_key=os.environ["API_KEY_WRITE"], api_secret=os.environ["API_SECRET_WRITE"])
 
-    asyncio.run(watcher.strat_loop_compute_entry())
-
-    asyncio.run(DB.close())
+    pp(asyncio.run(watcher.delist_exit()))
     asyncio.run(DB.close())

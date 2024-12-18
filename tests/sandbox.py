@@ -2,6 +2,7 @@ import os
 from datetime import datetime
 from pprint import pp
 
+import pkg_resources
 from binance.spot import Spot
 
 api_key = os.environ["API_KEY_WRITE"]
@@ -33,5 +34,8 @@ if __name__ == "__main__":
     # for info in spot.exchange_info(symbols=["WRXUSDT", "TROYUSDT"]).get("symbols"):
     #     info.pop("permissionSets")
     #     pp(info)
-    x = (0.0000054154 // 0.0000001) * 0.0000001
-    print(format(round(x, 8), "g"))
+    # x = (0.0000054154 // 0.0000001) * 0.0000001
+    # print(format(round(x, 8), "g"))
+
+    my_version = pkg_resources.get_distribution("curly-disco").version
+    pp(my_version)

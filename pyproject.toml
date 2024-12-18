@@ -6,7 +6,7 @@ authors = ["Eric SCHÄFER <schafer490@gmail.com>"]
 readme = "README.md"
 
 [tool.poetry.dependencies]
-python = "^3.12"
+python = ">=3.12,<3.14"
 nicegui = "^2.7.0"
 binance-connector = "^3.9.0"
 tortoise-orm = "^0.22.1"
@@ -16,6 +16,7 @@ fastapi-utilities = "^0.3.0"
 [tool.poetry.group.dev.dependencies]
 ruff = "^0.8.0"
 pytest = "^8.3.3"
+pyinstaller = "^6.11.1"
 
 [build-system]
 requires = ["poetry-core"]
