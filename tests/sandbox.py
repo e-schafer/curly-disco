@@ -1,41 +1,82 @@
-import os
-from datetime import datetime
-from pprint import pp
+#!/usr/bin/env python3
+from nicegui import events, ui
 
-import pkg_resources
-from binance.spot import Spot
+columns = [
+    {"name": "name", "label": "Name", "field": "name", "align": "left"},
+    {"name": "age", "label": "Age", "field": "age"},
+]
+rows = [
+    {"id": 0, "name": "Alice", "age": 18},
+    {"id": 1, "name": "Bob", "age": 21},
+    {"id": 2, "name": "Carol", "age": 20},
+]
 
-api_key = os.environ["API_KEY_WRITE"]
-api_secret = os.environ["API_SECRET_WRITE"]
+
+def add_row() -> None:
+    new_id = max((dx["id"] for dx in rows), default=-1) + 1
+    rows.append({"id": new_id, "name": "New guy", "age": 21})
+    ui.notify(f"Added new row with ID {new_id}")
+    table.update()
 
 
-if __name__ == "__main__":
-    spot = Spot(api_key=api_key, api_secret=api_secret)
-    # for order in spot.get_orders(symbol="DUSKUSDT"):
-    #     order["time"] = datetime.fromtimestamp(order["time"] / 1000).strftime("%Y-%m-%d %H:%M:%S.%f")
-    #     if order["status"] == "FILLED":
-    #         print(
-    #             f" {order['symbol']}  {order['time']} {order['side']} {order['type']} {order['price']} {order['origQty']} {order['cummulativeQuoteQty']} {order['status']}"
-    #         )
-    # print("--------------------------------------------")
-    # for trade in spot.my_trades(symbol="DUSKUSDT"):
-    #     # print(trade)
-    #     trade["time"] = datetime.fromtimestamp(trade["time"] / 1000).strftime("%Y-%m-%d %H:%M:%S.%f")
-    #     trade["side"] = "BUY" if trade["isBuyer"] else "SELL"
-    #     print(
-    #         f" {trade['symbol']}  {trade['time']} {trade['side']}  {trade['price']} {trade['qty']} {trade['quoteQty']} "
-    #     )
-    # print("--------------------------------------------")
-    # for order in spot.get_orders(symbol="BLZUSDT"):
-    #     order["time"] = datetime.fromtimestamp(order["time"] / 1000).strftime("%Y-%m-%d %H:%M:%S.%f")
-    #     if order["status"] == "CANCELED":
-    #         print(order)
-    # print("--------------------------------------------")
-    # for info in spot.exchange_info(symbols=["WRXUSDT", "TROYUSDT"]).get("symbols"):
-    #     info.pop("permissionSets")
-    #     pp(info)
-    # x = (0.0000054154 // 0.0000001) * 0.0000001
-    # print(format(round(x, 8), "g"))
+def rename(e: events.GenericEventArguments) -> None:
+    for row in rows:
+        if row["id"] == e.args["id"]:
+            row.update(e.args)
+    ui.notify(f"Updated rows to: {table.rows}")
+    table.update()
 
-    my_version = pkg_resources.get_distribution("curly-disco").version
-    pp(my_version)
+
+def delete(e: events.GenericEventArguments) -> None:
+    rows[:] = [row for row in rows if row["id"] != e.args["id"]]
+    ui.notify(f'Deleted row with ID {e.args["id"]}')
+    table.update()
+
+
+table = ui.table(columns=columns, rows=rows, row_key="name").classes("w-60")
+table.add_slot(
+    "header",
+    r"""
+    <q-tr :props="props">
+        <q-th auto-width />
+        <q-th v-for="col in props.cols" :key="col.name" :props="props">
+            {{ col.label }}
+        </q-th>
+    </q-tr>
+""",
+)
+table.add_slot(
+    "body",
+    r"""
+    <q-tr :props="props">
+        <q-td auto-width >
+            <q-btn size="sm" color="warning" round dense icon="delete"
+                @click="() => $parent.$emit('delete', props.row)"
+            />
+        </q-td>
+        <q-td key="name" :props="props">
+            {{ props.row.name }}
+            <q-popup-edit v-model="props.row.name" v-slot="scope"
+                @update:model-value="() => $parent.$emit('rename', props.row)"
+            >
+                <q-input v-model="scope.value" dense autofocus counter @keyup.enter="scope.set" />
+            </q-popup-edit>
+        </q-td>
+        <q-td key="age" :props="props">
+            {{ props.row.age }}
+            <q-popup-edit v-model="props.row.age" v-slot="scope"
+                @update:model-value="() => $parent.$emit('rename', props.row)"
+            >
+                <q-input v-model.number="scope.value" type="number" dense autofocus counter @keyup.enter="scope.set" />
+            </q-popup-edit>
+        </q-td>
+    </q-tr>
+""",
+)
+with table.add_slot("bottom-row"):
+    with table.cell().props("colspan=3"):
+        ui.button("Add row", icon="add", color="accent", on_click=add_row).classes("w-full")
+table.on("rename", rename)
+table.on("delete", delete)
+
+ui.run()

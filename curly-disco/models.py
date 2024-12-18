@@ -1,6 +1,9 @@
+import datetime
 from enum import StrEnum
 
 from tortoise import fields, models
+
+FORMAT_DATETIME = """val => date.formatDate(val, 'DD-MM-YYYY')"""
 
 
 class Orders(models.Model):
@@ -125,5 +128,9 @@ class Settings(models.Model):
         LESSPER_DEFAULT = "lessper_default"
 
     @staticmethod
-    async def get_settings(key: Keys):
-        return await Settings.get_or_none(key=key)
+    def nicegui_repr():
+        return [
+            {"name": "key", "label": "Key", "field": "key"},
+            {"name": "value", "label": "Value", "field": "value"},
+            {"name": "updated_at", "label": "Updated At", "field": "updated_at"},
+        ]

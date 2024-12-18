@@ -1,11 +1,12 @@
-import importlib.metadata
+import asyncio
 import os
+from pprint import pp
 
 import initdb
 import models
 import watcher
 from db import DB
-from nicegui import app, ui
+from nicegui import app, events, ui
 from views.slots import Slots
 
 # VERSION = importlib.metadata.version("curly-disco")
@@ -20,12 +21,12 @@ _watcher = watcher.Watcher(api_key=os.environ["API_KEY_WRITE"], api_secret=os.en
 @app.on_startup
 async def startup():
     await DB.init()
-    await _initdb.init_settings()
-    await _initdb.init_market()
-    await _initdb.init_assets()
+    # await _initdb.init_settings()
+    # await _initdb.init_market()
+    # await _initdb.init_assets()
     # await _initdb.init_orders_and_trades()
-    _watcher.loop_entries()  # type: ignore
-    _watcher.loop_exit()  # type: ignore
+    # _watcher.loop_entries()  # type: ignore
+    # _watcher.loop_exit()  # type: ignore
 
 
 @app.on_exception
@@ -108,13 +109,23 @@ async def manual_update_market():
     ui.notify("Market updated!")
 
 
+async def update_settings(e: events.GenericEventArguments):
+    ui.notify("Updating settings...")
+    pp(e.args)
+    if setting := await models.Settings.get_or_none(key=e.args["key"]):
+        setting.value = e.args["value"]
+        await setting.save()
+        ui.notify("Settings updated!")
+
+
 @ui.page("/", title="Curly Disco", response_timeout=20.0)
 async def index():
     with ui.header().classes(replace="row items-center"):
         with ui.tabs() as tabs:
             ui.tab("Home")
             ui.tab("Open orders")
-            ui.tab("Controls")
+            ui.tab("Settings")
+            # ui.tab("Controls")
         ui.label(f"Curly Disco {VERSION}")
     with ui.tab_panels(tabs, value="Home"):
         with ui.tab_panel("Home"):
@@ -125,6 +136,22 @@ async def index():
         with ui.tab_panel("Open orders"):
             ui.button("Refresh", on_click=panel_open_orders.refresh)
             await panel_open_orders()
+        with ui.tab_panel("Settings"):
+            with ui.table(
+                rows=await models.Settings.all().values(), columns=models.Settings.nicegui_repr()
+            ) as settings_table:
+                settings_table.add_slot(
+                    "body-cell-value",
+                    """
+                    <q-td key="value" :props="props">
+                    {{ props.row.value }}
+                    <q-popup-edit v-model="props.row.value" v-slot="scope"  @update:model-value="() => $parent.$emit('update', props.row)">
+                    <q-input v-model.number="scope.value" type="number"  dense autofocus counter @keyup.enter="scope.set" />
+                    </q-popup-edit>
+                    </q-td>""",
+                )
+                settings_table.on("update", update_settings)
+
         with ui.tab_panel("Controls"):
             ui.label("Controls")
             ui.button("Resync assets", on_click=lambda: manual_update_assets())
