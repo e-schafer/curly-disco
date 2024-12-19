@@ -1,21 +1,45 @@
-import asyncio
 import os
+from hashlib import sha256
 from pprint import pp
+from typing import Optional
 
 import initdb
 import models
 import watcher
 from db import DB
+from fastapi import Request
+from fastapi.responses import RedirectResponse
 from nicegui import app, events, ui
+from starlette.middleware.base import BaseHTTPMiddleware
 from views.slots import Slots
 
 # VERSION = importlib.metadata.version("curly-disco")
 VERSION = "0.1.0"
 NUMBER_OF_ITEMS = 20
+USER = {"pomato": "f64c58de18faf08ecb4f7aefadd72de60a014391421c134a2ef33220c53f61bf"}
+
+unrestricted_page_routes = {"/login"}
 
 
 _initdb = initdb.InitDB(api_key=os.environ["API_KEY_WRITE"], api_secret=os.environ["API_SECRET_WRITE"])
 _watcher = watcher.Watcher(api_key=os.environ["API_KEY_WRITE"], api_secret=os.environ["API_SECRET_WRITE"])
+
+
+class AuthMiddleware(BaseHTTPMiddleware):
+    """This middleware restricts access to all NiceGUI pages.
+
+    It redirects the user to the login page if they are not authenticated.
+    """
+
+    async def dispatch(self, request: Request, call_next):
+        if not app.storage.user.get("authenticated", False):
+            if not request.url.path.startswith("/_nicegui") and request.url.path not in unrestricted_page_routes:
+                app.storage.user["referrer_path"] = request.url.path  # remember where the user wanted to go
+                return RedirectResponse("/login")
+        return await call_next(request)
+
+
+app.add_middleware(AuthMiddleware)
 
 
 @app.on_startup
@@ -71,6 +95,7 @@ async def panel_home() -> None:
         home_table.add_slot("body-cell-gains", Slots.slot_red_green("gains", "$"))
         home_table.add_slot("body-cell-gains_percentage", Slots.slot_red_green("gains_percentage", "%"))
         # home_table.add_slot("body-cell-updated_at", slot_timestamp("updated_at"))
+    return None
 
 
 @ui.refreshable
@@ -84,6 +109,7 @@ async def panel_open_orders() -> None:
     ]
     open_orders = await _watcher.get_opened_buy_orders()
     ui.table(columns=order_columns, rows=open_orders, pagination=NUMBER_OF_ITEMS, row_key="pair")
+    return None
 
 
 @ui.refreshable
@@ -95,6 +121,7 @@ async def panel_trades() -> None:
     ) as trades_table:
         trades_table.add_slot("body-cell-gains", Slots.slot_red_green("gains", "$"))
         trades_table.add_slot("body-cell-gains_percentage", Slots.slot_red_green("gains_percentage", "%"))
+    return None
 
 
 async def manual_update_assets():
@@ -111,7 +138,6 @@ async def manual_update_market():
 
 async def update_settings(e: events.GenericEventArguments):
     ui.notify("Updating settings...")
-    pp(e.args)
     if setting := await models.Settings.get_or_none(key=e.args["key"]):
         setting.value = e.args["value"]
         await setting.save()
@@ -120,22 +146,28 @@ async def update_settings(e: events.GenericEventArguments):
 
 @ui.page("/", title="Curly Disco", response_timeout=20.0)
 async def index():
+    def logout() -> None:
+        app.storage.user.clear()
+        ui.navigate.to("/login")
+
     with ui.header().classes(replace="row items-center"):
         with ui.tabs() as tabs:
             ui.tab("Home")
             ui.tab("Open orders")
             ui.tab("Settings")
             # ui.tab("Controls")
-        ui.label(f"Curly Disco {VERSION}")
+        with ui.row().classes("items-center absolute-right"):
+            ui.label(f"pomato {VERSION}")
+            ui.button(on_click=logout, icon="logout").props("outline round")
     with ui.tab_panels(tabs, value="Home"):
         with ui.tab_panel("Home"):
             ui.button("Refresh", on_click=panel_home.refresh)
-            await panel_home()
+            await panel_home()  # type: ignore
             ui.button("Refresh", on_click=panel_trades.refresh)
-            await panel_trades()
+            await panel_trades()  # type: ignore
         with ui.tab_panel("Open orders"):
             ui.button("Refresh", on_click=panel_open_orders.refresh)
-            await panel_open_orders()
+            await panel_open_orders()  # type: ignore
         with ui.tab_panel("Settings"):
             with ui.table(
                 rows=await models.Settings.all().values(), columns=models.Settings.nicegui_repr()
@@ -159,5 +191,23 @@ async def index():
             ui.button("Resync market", on_click=lambda: manual_update_market())
 
 
+@ui.page("/login")
+def login() -> Optional[RedirectResponse]:
+    def try_login() -> None:  # local function to avoid passing username and password as arguments
+        if USER.get(username.value) == sha256(password.value.encode("utf-8")).hexdigest():
+            app.storage.user.update({"username": username.value, "authenticated": True})
+            ui.navigate.to(app.storage.user.get("referrer_path", "/"))  # go back to where the user wanted to go
+        else:
+            ui.notify("Wrong username or password", color="negative")
+
+    if app.storage.user.get("authenticated", False):
+        return RedirectResponse("/")
+    with ui.card().classes("absolute-center"):
+        username = ui.input("Username").on("keydown.enter", try_login)
+        password = ui.input("Password", password=True, password_toggle_button=True).on("keydown.enter", try_login)
+        ui.button("Log in", on_click=try_login)
+    return None
+
+
 ui.dark_mode(value=True)
-ui.run(reload=False)
+ui.run(reload=False, storage_secret="THIS_NEEDS_TO_BE_CHANGED")
