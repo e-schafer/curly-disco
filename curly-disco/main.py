@@ -1,6 +1,5 @@
 import os
 from hashlib import sha256
-from pprint import pp
 from typing import Optional
 
 import initdb
@@ -13,16 +12,15 @@ from nicegui import app, events, ui
 from starlette.middleware.base import BaseHTTPMiddleware
 from views.slots import Slots
 
-# VERSION = importlib.metadata.version("curly-disco")
 VERSION = "0.1.0"
 NUMBER_OF_ITEMS = 20
-USER = {"pomato": "f64c58de18faf08ecb4f7aefadd72de60a014391421c134a2ef33220c53f61bf"}
+AUTHENICATION = os.environ["AUTHENTICATION_HASH"]
+BINANCE_API_KEY = os.environ["BINANCE_API_KEY"]
+BINANCE_API_SECRET = os.environ["BINANCE_API_SECRET"]
 
 unrestricted_page_routes = {"/login"}
-
-
-_initdb = initdb.InitDB(api_key=os.environ["API_KEY_WRITE"], api_secret=os.environ["API_SECRET_WRITE"])
-_watcher = watcher.Watcher(api_key=os.environ["API_KEY_WRITE"], api_secret=os.environ["API_SECRET_WRITE"])
+_initdb = initdb.InitDB(api_key=BINANCE_API_KEY, api_secret=BINANCE_API_SECRET)
+_watcher = watcher.Watcher(api_key=BINANCE_API_KEY, api_secret=BINANCE_API_SECRET)
 
 
 class AuthMiddleware(BaseHTTPMiddleware):
@@ -45,12 +43,12 @@ app.add_middleware(AuthMiddleware)
 @app.on_startup
 async def startup():
     await DB.init()
-    # await _initdb.init_settings()
-    # await _initdb.init_market()
-    # await _initdb.init_assets()
+    await _initdb.init_settings()
+    await _initdb.init_market()
+    await _initdb.init_assets()
     # await _initdb.init_orders_and_trades()
-    # _watcher.loop_entries()  # type: ignore
-    # _watcher.loop_exit()  # type: ignore
+    _watcher.loop_entries()  # type: ignore
+    _watcher.loop_exit()  # type: ignore
 
 
 @app.on_exception
@@ -69,19 +67,27 @@ async def panel_home() -> None:
     with ui.row():
         with ui.card().props("flat bordered"):
             ui.label("Total gains")
-            ui.label(f"{liquidity['total_gains']}$")
+            ui.label(f"{round(liquidity['total_gains'],2)}$")
+        with ui.card().props("flat bordered"):
+            ui.label("Open gains")
+            open_gains = round(liquidity["bought"] - liquidity["total_gains"], 2)
+            gains_label = ui.label(f"{open_gains}$")
+            if open_gains > 0:
+                gains_label.classes("text-positive")
+            else:
+                gains_label.classes("text-negative")
         with ui.card().props("flat bordered"):
             ui.label("Market value")
-            ui.label(f"{liquidity['market_value']}$")
+            ui.label(f"{round(liquidity['market_value'],2)}$")
         with ui.card().props("flat bordered"):
             ui.label("Liquidity engaged")
-            ui.label(f"{liquidity['bought']}$")
+            ui.label(f"{round(liquidity['bought'],2)}$")
         with ui.card().props("flat bordered"):
             ui.label("Liquidity locked")
-            ui.label(f"{liquidity['locked']}$")
+            ui.label(f"{round(liquidity['locked'],2)}$")
         with ui.card().props("flat bordered"):
             ui.label("Liquidity available")
-            ui.label(f"{liquidity['free']}$")
+            ui.label(f"{round(liquidity['free'],2)}$")
     ui.label("Current assets")
     await _watcher.update_assets_gains()
     assets = await models.Assets.all().values()
@@ -194,7 +200,7 @@ async def index():
 @ui.page("/login")
 def login() -> Optional[RedirectResponse]:
     def try_login() -> None:  # local function to avoid passing username and password as arguments
-        if USER.get(username.value) == sha256(password.value.encode("utf-8")).hexdigest():
+        if AUTHENICATION == sha256(f"{username.value}:{password.value}".encode("utf-8")).hexdigest():
             app.storage.user.update({"username": username.value, "authenticated": True})
             ui.navigate.to(app.storage.user.get("referrer_path", "/"))  # go back to where the user wanted to go
         else:
