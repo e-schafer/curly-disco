@@ -1,3 +1,8 @@
+# Specific project
+.nicegui/
+docker-compose.yaml
+.volumes/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
@@ -60,10 +65,12 @@ cover/
 local_settings.py
 db.sqlite3
 db.sqlite3-journal
+db.sqlite3-wal
+db.sqlite3-shm
 
 # Flask stuff:
 instance/
-.webassets-cache
+.websymbols-cache
 
 # Scrapy stuff:
 .scrapy
