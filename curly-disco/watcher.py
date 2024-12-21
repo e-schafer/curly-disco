@@ -3,7 +3,6 @@ import os
 from datetime import datetime
 from itertools import chain
 from pprint import pp
-from re import L
 from statistics import mean
 
 import models
@@ -22,7 +21,7 @@ class Watcher:
         self.ws_client = SpotWebsocketStreamClient(
             on_message=self.on_message, stream_url="wss://stream.testnet.binance.vision:9443/ws"
         )
-        self.listen_key = self.client.new_listen_key()
+        # self.listen_key = self.client.new_listen_key()
 
     async def start(self):
         pass
@@ -271,7 +270,7 @@ class Watcher:
         )
         trades = await models.Trades.annotate(gains=tf.Sum("gains")).first().values()
         if trades:
-            liquidity["total_gains"] = float(trades["gains"])
+            liquidity["total_gains"] = float(trades["gains"] if trades["gains"] else 0)
         liquidity["bought"] = float(asset["crypto_bought"])
         liquidity["market_value"] = float(asset["market_value"]) + liquidity["free"] + liquidity["locked"]
         if usdt := self.client.user_asset(asset="USDT"):

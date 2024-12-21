@@ -46,7 +46,7 @@ async def startup():
     await _initdb.init_settings()
     await _initdb.init_market()
     await _initdb.init_assets()
-    # await _initdb.init_orders_and_trades()
+    await _initdb.init_orders_and_trades()
     _watcher.loop_entries()  # type: ignore
     _watcher.loop_exit()  # type: ignore
 
