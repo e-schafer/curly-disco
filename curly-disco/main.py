@@ -70,7 +70,7 @@ async def panel_home() -> None:
             ui.label(f"{round(liquidity['total_gains'],2)}$")
         with ui.card().props("flat bordered"):
             ui.label("Open gains")
-            open_gains = round(liquidity["bought"] - liquidity["total_gains"], 2)
+            open_gains = round(liquidity["bought"] - liquidity["market_value"], 2)
             gains_label = ui.label(f"{open_gains}$")
             if open_gains > 0:
                 gains_label.classes("text-positive")
