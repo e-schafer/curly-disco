@@ -200,8 +200,8 @@ if __name__ == "__main__":
     asyncio.run(DB.init())
 
     bot = InitDB(
-        api_key=os.environ["API_KEY_WRITE"],
-        api_secret=os.environ["API_SECRET_WRITE"],
+        api_key=os.environ["BINANCE_API_KEY"],
+        api_secret=os.environ["BINANCE_API_SECRET"],
     )
     asyncio.run(bot.first_run())
 
