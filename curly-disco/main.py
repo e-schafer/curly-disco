@@ -1,4 +1,5 @@
 import os
+import traceback
 from hashlib import sha256
 from typing import Optional
 
@@ -9,6 +10,7 @@ from db import DB
 from fastapi import Request
 from fastapi.responses import RedirectResponse
 from nicegui import app, events, ui
+from nicegui.elements.input import Input
 from starlette.middleware.base import BaseHTTPMiddleware
 from views.slots import Slots
 
@@ -17,7 +19,8 @@ NUMBER_OF_ITEMS = 20
 AUTHENICATION = os.environ["AUTHENTICATION_HASH"]
 BINANCE_API_KEY = os.environ["BINANCE_API_KEY"]
 BINANCE_API_SECRET = os.environ["BINANCE_API_SECRET"]
-
+SKIP_INIT = True if os.environ["SKIP_INIT"].lower() == "true" else False
+print("SKIP_INIT", SKIP_INIT)
 unrestricted_page_routes = {"/login"}
 _initdb = initdb.InitDB(api_key=BINANCE_API_KEY, api_secret=BINANCE_API_SECRET)
 _watcher = watcher.Watcher(api_key=BINANCE_API_KEY, api_secret=BINANCE_API_SECRET)
@@ -43,17 +46,22 @@ app.add_middleware(AuthMiddleware)
 @app.on_startup
 async def startup():
     await DB.init()
-    await _initdb.init_settings()
-    await _initdb.init_market()
-    await _initdb.init_assets()
-    await _initdb.init_orders_and_trades()
+    if not SKIP_INIT:
+        await _initdb.init_settings()
+        await _initdb.init_market()
+        await _initdb.init_assets()
+        await _initdb.init_orders_and_trades()
     _watcher.loop_entries()  # type: ignore
     _watcher.loop_exit()  # type: ignore
 
 
 @app.on_exception
 async def error(error: Exception):
-    ui.notify(str(error))
+    ui.notify(
+        "Website Exception: \n" f"{traceback.format_exception(error)} \n",
+        multi_line=True,
+        classes="multi-line-notification",
+    )
 
 
 @app.on_shutdown
@@ -70,7 +78,7 @@ async def panel_home() -> None:
             ui.label(f"{round(liquidity['total_gains'],2)}$")
         with ui.card().props("flat bordered"):
             ui.label("Open gains")
-            open_gains = round(liquidity["bought"] - liquidity["market_value"], 2)
+            open_gains = round(liquidity["market_value"] - liquidity["bought"], 2)
             gains_label = ui.label(f"{open_gains}$")
             if open_gains > 0:
                 gains_label.classes("text-positive")
@@ -209,7 +217,7 @@ def login() -> Optional[RedirectResponse]:
     if app.storage.user.get("authenticated", False):
         return RedirectResponse("/")
     with ui.card().classes("absolute-center"):
-        username = ui.input("Username").on("keydown.enter", try_login)
+        username: Input = ui.input("Username").on("keydown.enter", try_login)
         password = ui.input("Password", password=True, password_toggle_button=True).on("keydown.enter", try_login)
         ui.button("Log in", on_click=try_login)
     return None
