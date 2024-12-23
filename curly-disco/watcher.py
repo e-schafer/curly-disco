@@ -56,6 +56,8 @@ class Watcher:
                     {
                         "token_quantity": float(asset.token_quantity) + token_qty,
                         "quote_quantity": float(asset.quote_quantity) + quote_qty,
+                        "market_value": (float(asset.token_quantity) + token_qty)
+                        * (float(asset.quote_quantity) + quote_qty),
                     }
                 )
             else:
@@ -205,6 +207,8 @@ class Watcher:
                 opened_orders.append(
                     {
                         "pair": order["symbol"],
+                        "side": order["side"],
+                        "type": order["type"],
                         "quantity": order["origQty"],
                         "target_price": (target_price := float(order["price"])),
                         "current_price": (current_price := prices[order["symbol"]]),
@@ -219,9 +223,12 @@ class Watcher:
             prices = await self.pairs_to_prices([x.id for x in assets])
             for asset in assets:
                 asset.market_value = float(asset.token_quantity) * prices[asset.id]
+                asset.market_unit_price = prices[asset.id]
                 asset.gains = asset.market_value - float(asset.quote_quantity)
                 asset.gains_percentage = (asset.gains / float(asset.quote_quantity)) * 100
-            await models.Assets.bulk_update(assets, fields=["market_value", "gains", "gains_percentage", "updated_at"])
+            await models.Assets.bulk_update(
+                assets, fields=["market_value", "market_unit_price", "gains", "gains_percentage", "updated_at"]
+            )
 
     @repeat_at(cron="*/5 * * * *")
     def loop_exit(self):

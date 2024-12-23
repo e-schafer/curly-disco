@@ -47,7 +47,7 @@ class InitDB:
                     list(filter(lambda x: x["status"] == "FILLED", self.client.get_orders(symbol=pair))),
                 )
             )
-            print(f"Orders found {len(data)} for {pair}")
+            print(f"Orders found {len(data)} for {pair}") if data else None
             await models.Orders.bulk_create(data, on_conflict=["id"], ignore_conflicts=True)
             await models.Trades.bulk_create(
                 objects=await self.__init_trades_history(data),
@@ -85,8 +85,10 @@ class InitDB:
                         opened_at=opened_at,
                         closed_at=order.timestamp,
                         token_quantity=order.token_quantity,
-                        quote_quantity=BQuoteQuantity,
-                        sold_value=order.quote_quantity,
+                        buy_unit_price=Btoken_quantity / BQuoteQuantity,
+                        buy_quote_quantity=BQuoteQuantity,
+                        sell_unit_price=order.base_unit_price,
+                        sell_quote_quantity=order.quote_quantity,
                         gains=order.quote_quantity - BQuoteQuantity,
                         gains_percentage=(
                             ((order.quote_quantity / BQuoteQuantity) - 1) * 100 if BQuoteQuantity != 0 else 0
@@ -165,9 +167,9 @@ class InitDB:
                 id=pair,
                 token_quantity=token_quantity,
                 quote_quantity=quote_quantity,
-                base_unit_price=quote_quantity / token_quantity,
-                current_unit_price=current_unit_price,
+                buy_unit_price=quote_quantity / token_quantity,
                 market_value=token_quantity * current_unit_price,
+                market_unit_price=current_unit_price,
                 gains=token_quantity * current_unit_price - quote_quantity,
                 gains_percentage=((token_quantity * current_unit_price) / quote_quantity - 1) * 100,
                 opened_at=opened_at,
@@ -203,6 +205,6 @@ if __name__ == "__main__":
         api_key=os.environ["BINANCE_API_KEY"],
         api_secret=os.environ["BINANCE_API_SECRET"],
     )
-    asyncio.run(bot.first_run())
+    asyncio.run(bot.init_assets())
 
     asyncio.run(DB.close())

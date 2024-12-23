@@ -14,12 +14,13 @@ from nicegui.elements.input import Input
 from starlette.middleware.base import BaseHTTPMiddleware
 from views.slots import Slots
 
-VERSION = "0.1.0"
+VERSION = "0.2.0"
 NUMBER_OF_ITEMS = 20
 AUTHENICATION = os.environ["AUTHENTICATION_HASH"]
 BINANCE_API_KEY = os.environ["BINANCE_API_KEY"]
 BINANCE_API_SECRET = os.environ["BINANCE_API_SECRET"]
 SKIP_INIT = True if os.environ["SKIP_INIT"].lower() == "true" else False
+
 print("SKIP_INIT", SKIP_INIT)
 unrestricted_page_routes = {"/login"}
 _initdb = initdb.InitDB(api_key=BINANCE_API_KEY, api_secret=BINANCE_API_SECRET)
@@ -46,10 +47,10 @@ app.add_middleware(AuthMiddleware)
 @app.on_startup
 async def startup():
     await DB.init()
+    await _initdb.init_settings()
+    await _initdb.init_market()
+    await _initdb.init_assets()
     if not SKIP_INIT:
-        await _initdb.init_settings()
-        await _initdb.init_market()
-        await _initdb.init_assets()
         await _initdb.init_orders_and_trades()
     _watcher.loop_entries()  # type: ignore
     _watcher.loop_exit()  # type: ignore
