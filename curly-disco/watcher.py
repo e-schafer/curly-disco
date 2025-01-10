@@ -18,18 +18,11 @@ class Watcher:
     def __init__(self, api_key, api_secret):
         self.client: Spot = Spot(api_key, api_secret)
 
-        self.ws_client = SpotWebsocketStreamClient(
-            on_message=self.on_message, stream_url="wss://stream.testnet.binance.vision:9443/ws"
-        )
-        # self.listen_key = self.client.new_listen_key()
+        self.ws_client = SpotWebsocketStreamClient(on_message=self.on_message)
+        self.listen_key = self.client.new_listen_key()["listenKey"]
+        self.ws_client.user_data(listen_key=self.listen_key)
 
-    async def start(self):
-        pass
-
-    async def stop(self):
-        pass
-
-    async def on_message(self, msg):
+    async def on_message(self, _, msg):
         match msg["e"]:
             case "executionReport":
                 await self.handle_execution_report(msg)
@@ -40,17 +33,31 @@ class Watcher:
 
     async def handle_execution_report(self, msg):
         pair = msg["s"]
+        token_qty = float(msg["q"])
+        quote_qty = float(msg["p"])
 
+        if msg["X"] != "FILLED":
+            return
         asset = await models.Assets().get(id=pair)
+
+        await models.Orders.create(
+            id=msg["i"],
+            pair=pair,
+            side=msg["S"],
+            base_unit_price=msg["p"],
+            token_quantity=msg["q"],
+            quote_quantity=msg["p"] * msg["q"],
+            timestamp=datetime.fromtimestamp(msg["T"] / 1000),
+        )
+
         if msg["S"] == "BUY":
-            token_qty = float(msg["q"])
-            quote_qty = float(msg["p"])
-            asset = await models.Assets().get(id=pair)
             if asset:
                 asset.update_from_dict(
                     {
                         "token_quantity": float(asset.token_quantity) + token_qty,
                         "quote_quantity": float(asset.quote_quantity) + quote_qty,
+                        "market_value": (float(asset.token_quantity) + token_qty)
+                        * (float(asset.quote_quantity) + quote_qty),
                     }
                 )
             else:
@@ -64,7 +71,25 @@ class Watcher:
                 # trigger mitraille order
 
         elif msg["S"] == "SELL":
-            # TODO
+            if asset:
+                if float(asset.token_quantity) - token_qty < 0.0000001:
+                    await asset.delete()
+                else:
+                    asset.update_from_dict(
+                        {
+                            "token_quantity": float(asset.token_quantity) - token_qty,
+                            "quote_quantity": float(asset.quote_quantity) - quote_qty,
+                        }
+                    )
+                await models.Trades.create(
+                    pair=pair,
+                    token_quantity=token_qty,
+                    quote_quantity=quote_qty,
+                    gains=quote_qty - float(asset.quote_quantity),
+                    gains_percentage=((quote_qty - float(asset.quote_quantity)) / float(asset.quote_quantity)) * 100,
+                    opened_at=asset.opened_at,
+                    closed_at=datetime.fromtimestamp(msg["T"] / 1000),
+                )
             pass
         else:
             pass
@@ -182,6 +207,8 @@ class Watcher:
                 opened_orders.append(
                     {
                         "pair": order["symbol"],
+                        "side": order["side"],
+                        "type": order["type"],
                         "quantity": order["origQty"],
                         "target_price": (target_price := float(order["price"])),
                         "current_price": (current_price := prices[order["symbol"]]),
@@ -196,9 +223,12 @@ class Watcher:
             prices = await self.pairs_to_prices([x.id for x in assets])
             for asset in assets:
                 asset.market_value = float(asset.token_quantity) * prices[asset.id]
+                asset.market_unit_price = prices[asset.id]
                 asset.gains = asset.market_value - float(asset.quote_quantity)
                 asset.gains_percentage = (asset.gains / float(asset.quote_quantity)) * 100
-            await models.Assets.bulk_update(assets, fields=["market_value", "gains", "gains_percentage", "updated_at"])
+            await models.Assets.bulk_update(
+                assets, fields=["market_value", "market_unit_price", "gains", "gains_percentage", "updated_at"]
+            )
 
     @repeat_at(cron="*/5 * * * *")
     def loop_exit(self):
@@ -274,15 +304,15 @@ class Watcher:
         liquidity["bought"] = float(asset["crypto_bought"])
         liquidity["market_value"] = float(asset["market_value"]) + liquidity["free"] + liquidity["locked"]
         if usdt := self.client.user_asset(asset="USDT"):
-            liquidity["locked"] = float(usdt["locked"])
-            liquidity["free"] = float(usdt["free"])
+            liquidity["locked"] = float(usdt[0]["locked"])
+            liquidity["free"] = float(usdt[0]["free"])
         return liquidity
 
 
 if __name__ == "__main__":
     asyncio.run(DB.init())
 
-    watcher = Watcher(api_key=os.environ["API_KEY_WRITE"], api_secret=os.environ["API_SECRET_WRITE"])
+    watcher = Watcher(api_key=os.environ["BINANCE_API_KEY"], api_secret=os.environ["BINANCE_API_SECRET"])
 
     pp(asyncio.run(watcher.delist_exit()))
     asyncio.run(DB.close())

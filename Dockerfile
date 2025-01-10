@@ -29,7 +29,7 @@ RUN curl -sSL https://install.python-poetry.org | python3 -
 
 WORKDIR /app
 COPY poetry.lock pyproject.toml /app/
-RUN poetry install --no-interaction --no-ansi
+RUN poetry install --no-interaction --no-ansi --only=main
 
 COPY ./curly-disco/ /app
 HEALTHCHECK --interval=60s --timeout=3s CMD curl -f http://localhost:8080 || exit 1

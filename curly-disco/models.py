@@ -41,13 +41,15 @@ class Trades(models.Model):
     opened_at = fields.DatetimeField()
     closed_at = fields.DatetimeField()
     token_quantity = fields.DecimalField(10, 10)
-    quote_quantity = fields.DecimalField(10, 10)
-    sold_value = fields.DecimalField(10, 10)
+    buy_unit_price = fields.DecimalField(10, 10)
+    buy_quote_quantity = fields.DecimalField(10, 10)
+    sell_unit_price = fields.DecimalField(10, 10)
+    sell_quote_quantity = fields.DecimalField(10, 10)
     gains = fields.DecimalField(10, 10)
     gains_percentage = fields.DecimalField(10, 10)
 
     def __repr__(self) -> str:
-        return f"{self.pair} {self.opened_at} {self.closed_at} {self.token_quantity} {self.quote_quantity}  {self.sold_value} {self.gains} {self.gains_percentage} "
+        return f"{self.pair} {self.opened_at} {self.closed_at} {self.token_quantity} {self.buy_quote_quantity}  {self.sell_quote_quantity} {self.gains} {self.gains_percentage} "
 
     @staticmethod
     def nicegui_repr():
@@ -57,8 +59,18 @@ class Trades(models.Model):
             {"name": "opened_at", "label": "Open Timestamp", "field": "opened_at", "sortable": True},
             {"name": "closed_at", "label": "Close Timestamp", "field": "closed_at", "sortable": True},
             {"name": "token_quantity", "label": "Token Quantity", "field": "token_quantity", "sortable": True},
-            {"name": "quote_quantity", "label": "Buy USDT Quantity", "field": "quote_quantity", "sortable": True},
-            {"name": "sold_value", "label": "Sell USDT Quantity", "field": "sold_value", "sortable": True},
+            {
+                "name": "buy_quote_quantity",
+                "label": "Buy USDT Quantity",
+                "field": "buy_quote_quantity",
+                "sortable": True,
+            },
+            {
+                "name": "sell_quote_quantity",
+                "label": "Sell USDT Quantity",
+                "field": "sell_quote_quantity",
+                "sortable": True,
+            },
             {"name": "gains", "label": "Gains", "field": "gains", "sortable": True, "required": True},
             {"name": "gains_percentage", "label": "Gains Percentage", "field": "gains_percentage", "sortable": True},
         ]
@@ -71,8 +83,9 @@ class Assets(models.Model):
     id = fields.CharField(max_length=10, pk=True)
     token_quantity = fields.DecimalField(10, 10)
     quote_quantity = fields.DecimalField(10, 10)
-    base_unit_price = fields.DecimalField(10, 10)
+    buy_unit_price = fields.DecimalField(10, 10)
     market_value = fields.DecimalField(10, 10)
+    market_unit_price = fields.DecimalField(10, 10)
     gains = fields.DecimalField(10, 10)
     gains_percentage = fields.DecimalField(10, 10)
     opened_at = fields.DatetimeField(auto_now_add=True)
@@ -87,8 +100,14 @@ class Assets(models.Model):
             {"name": "id", "label": "ID", "field": "id", "sortable": True, "required": True},
             {"name": "token_quantity", "label": "Token Quantity", "field": "token_quantity", "required": True},
             {"name": "quote_quantity", "label": "Buy USDT Quantity", "field": "quote_quantity", "sortable": True},
-            {"name": "base_unit_price", "label": "Buy Unit Price", "field": "base_unit_price", "required": True},
+            {"name": "buy_unit_price", "label": "Buy Unit Price", "field": "buy_unit_price", "required": True},
             {"name": "market_value", "label": "Current USDT Value", "field": "market_value", "sortable": True},
+            {
+                "name": "market_unit_price",
+                "label": "Current Unit Price",
+                "field": "market_unit_price",
+                "sortable": True,
+            },
             {"name": "gains", "label": "Current gains", "field": "gains", "sortable": True},
             {"name": "gains_percentage", "label": "Gains Percentage", "field": "gains_percentage", "sortable": True},
             {"name": "opened_at", "label": "Open Timestamp", "field": "opened_at", "sortable": True},
