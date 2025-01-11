@@ -14,7 +14,7 @@ from nicegui.elements.input import Input
 from starlette.middleware.base import BaseHTTPMiddleware
 from views.slots import Slots
 
-VERSION = "0.2.0"
+VERSION = "0.2.1"
 NUMBER_OF_ITEMS = 20
 AUTHENICATION = os.environ["AUTHENTICATION_HASH"]
 BINANCE_API_KEY = os.environ["BINANCE_API_KEY"]
