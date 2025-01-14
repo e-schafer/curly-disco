@@ -21,6 +21,7 @@ BINANCE_API_KEY = os.environ["BINANCE_API_KEY"]
 BINANCE_API_SECRET = os.environ["BINANCE_API_SECRET"]
 SKIP_INIT_HISTORIC = True if os.environ["SKIP_INIT_HISTORIC"].lower() == "true" else False
 SKIP_INIT_ENTRIES = True if os.environ["SKIP_INIT_ENTRIES"].lower() == "true" else False
+DISABLE_WATCHER = True if os.environ["DISABLE_WATCHER"].lower() == "true" else False
 
 print("SKIP_INIT_HISTORIC", SKIP_INIT_HISTORIC)
 print("SKIP_INIT_ENTRIE", SKIP_INIT_ENTRIES)
@@ -57,8 +58,10 @@ async def startup():
         await _initdb.init_orders_and_trades()
     if not SKIP_INIT_ENTRIES:
         await _watcher.strat_loop_compute_entry()
-    _watcher.loop_entries()  # type: ignore
-    _watcher.loop_exit()  # type: ignore
+    if not DISABLE_WATCHER:
+        _watcher.loop_entries()  # type: ignore
+        _watcher.loop_exit()  # type: ignore
+        await _watcher.strat_loop_compute_exit()
 
 
 @app.on_exception
@@ -127,7 +130,7 @@ async def panel_open_orders() -> None:
         {"name": "Target price", "label": "target", "field": "target_price", "sortable": True},
         {"name": "Far", "label": "far", "field": "far", "sortable": True},
     ]
-    open_orders = await _watcher.get_opened_buy_orders()
+    open_orders = await _watcher.get_opened_orders()
     ui.table(columns=order_columns, rows=open_orders, pagination=NUMBER_OF_ITEMS, row_key="pair")
     return None
 

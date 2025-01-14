@@ -35,7 +35,7 @@ class Watcher:
         pair = msg["s"]
         token_qty = float(msg["q"])
         quote_qty = float(msg["p"])
-
+        base_unit_price = float(msg["p"])
         if msg["X"] != "FILLED":
             return
         asset = await models.Assets().get(id=pair)
@@ -44,7 +44,7 @@ class Watcher:
             id=msg["i"],
             pair=pair,
             side=msg["S"],
-            base_unit_price=msg["p"],
+            base_unit_price=base_unit_price,
             token_quantity=msg["q"],
             quote_quantity=msg["p"] * msg["q"],
             timestamp=datetime.fromtimestamp(msg["T"] / 1000),
@@ -68,7 +68,7 @@ class Watcher:
                     market_value=token_qty * quote_qty,
                     opened_at=datetime.fromtimestamp(msg["T"] / 1000),
                 )
-                # trigger mitraille order
+                # await self.mitrailles(pair, base_unit_price)
 
         elif msg["S"] == "SELL":
             if asset:
@@ -93,6 +93,10 @@ class Watcher:
             pass
         else:
             pass
+
+    async def mitrailles(self, pair: str, start_price: float):
+        mitraille_range = float((await models.Settings.get(key=models.Settings.Keys.MITRAILLE_PERCENTAGE)).value)
+        mitraille_quantity = float((await models.Settings.get(key=models.Settings.Keys.MITRAILLE_QUANTITY)).value)
 
     async def get_lessper(self):
         lessper = float((await models.Settings.get(key=models.Settings.Keys.LESSPER_DEFAULT)).value)
@@ -198,23 +202,36 @@ class Watcher:
         )
         return prices
 
-    async def get_opened_buy_orders(self) -> list[dict]:
+    async def get_opened_orders(self) -> list[dict]:
         orders = self.client.get_open_orders()
         opened_orders = []
         if orders:
             prices = await self.pairs_to_prices([x["symbol"] for x in orders])
             for order in orders:
-                opened_orders.append(
-                    {
-                        "pair": order["symbol"],
-                        "side": order["side"],
-                        "type": order["type"],
-                        "quantity": order["origQty"],
-                        "target_price": (target_price := float(order["price"])),
-                        "current_price": (current_price := prices[order["symbol"]]),
-                        "far": ((float(current_price) / target_price) - 1) * 100,
-                    }
-                )
+                if order["side"] == "BUY":
+                    opened_orders.append(
+                        {
+                            "pair": order["symbol"],
+                            "side": order["side"],
+                            "type": order["type"],
+                            "quantity": order["origQty"],
+                            "target_price": (target_price := float(order["price"])),
+                            "current_price": (current_price := prices[order["symbol"]]),
+                            "far": ((float(current_price) / target_price) - 1) * 100,
+                        }
+                    )
+                else:
+                    opened_orders.append(
+                        {
+                            "pair": order["symbol"],
+                            "side": order["side"],
+                            "type": order["type"],
+                            "quantity": order["origQty"],
+                            "target_price": None,
+                            "current_price": (current_price := prices[order["symbol"]]),
+                            "far": 0,
+                        }
+                    )
         return opened_orders
 
     async def update_assets_gains(self):
@@ -238,18 +255,20 @@ class Watcher:
         print(f"Strat loop exit {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         await self.update_assets_gains()
         await self.delist_exit()
+        open_orders = list(filter(lambda x: x["side"] == "SELL", self.client.get_open_orders()))
+
         assets = await models.Assets().all()
         sell_gains_percentage = float((await models.Settings.get(key=models.Settings.Keys.SELL_GAINS_PERCENTAGE)).value)
-        sell_trailing_stop = float((await models.Settings.get(key=models.Settings.Keys.SELL_TRAILING_STOP)).value)
+        sell_trailing_stop = int((await models.Settings.get(key=models.Settings.Keys.SELL_TRAILING_STOP)).value) * 100
         for asset in assets:
+            sell_orders = list(filter(lambda x: x["symbol"] == asset.id, open_orders))
             print(f"Checking exit for {asset.id} {asset.gains_percentage}")
-            if asset.gains_percentage >= sell_gains_percentage:
+            if asset.gains_percentage >= sell_gains_percentage and not sell_orders:
                 try:
                     self.client.new_order(
                         symbol=asset.id,
                         side="SELL",
                         type="TAKE_PROFIT",
-                        timeInForce="GTC",
                         quantity=asset.token_quantity,
                         trailingDelta=sell_trailing_stop,
                     )

@@ -15,3 +15,9 @@
 export CR_PAT=ghp_...
 echo $CR_PAT | docker login ghcr.io -u USERNAME --password-stdin
 ```
+
+### Poetry create requirements.txt
+
+```shell
+poetry export --without-hashes --format=requirements.txt > requirements.txt
+```
