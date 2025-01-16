@@ -16,12 +16,12 @@ from views.slots import Slots
 
 VERSION = "0.2.0"
 NUMBER_OF_ITEMS = 20
-AUTHENICATION = os.environ["AUTHENTICATION_HASH"]
+AUTHENTICATION = os.environ["AUTHENTICATION_HASH"]
 BINANCE_API_KEY = os.environ["BINANCE_API_KEY"]
 BINANCE_API_SECRET = os.environ["BINANCE_API_SECRET"]
-SKIP_INIT_HISTORIC = True if os.environ["SKIP_INIT_HISTORIC"].lower() == "true" else False
-SKIP_INIT_ENTRIES = True if os.environ["SKIP_INIT_ENTRIES"].lower() == "true" else False
-DISABLE_WATCHER = True if os.environ["DISABLE_WATCHER"].lower() == "true" else False
+SKIP_INIT_HISTORIC = True if os.getenv("SKIP_INIT_HISTORIC", "").lower() == "true" else False
+SKIP_INIT_ENTRIES = True if os.getenv("SKIP_INIT_ENTRIES", "").lower() == "true" else False
+DISABLE_WATCHER = True if os.getenv("DISABLE_WATCHER", "").lower() == "true" else False
 
 print("SKIP_INIT_HISTORIC", SKIP_INIT_HISTORIC)
 print("SKIP_INIT_ENTRIE", SKIP_INIT_ENTRIES)
@@ -57,7 +57,7 @@ async def startup():
     if not SKIP_INIT_HISTORIC:
         await _initdb.init_orders_and_trades()
     if not SKIP_INIT_ENTRIES:
-        await _watcher.strat_loop_compute_entry()
+        await _watcher.strat_compute_entry()
     if not DISABLE_WATCHER:
         _watcher.loop_entries()  # type: ignore
         _watcher.loop_exit()  # type: ignore
@@ -217,7 +217,7 @@ async def index():
 @ui.page("/login")
 def login() -> Optional[RedirectResponse]:
     def try_login() -> None:  # local function to avoid passing username and password as arguments
-        if AUTHENICATION == sha256(f"{username.value}:{password.value}".encode("utf-8")).hexdigest():
+        if AUTHENTICATION == sha256(f"{username.value}:{password.value}".encode("utf-8")).hexdigest():
             app.storage.user.update({"username": username.value, "authenticated": True})
             ui.navigate.to(app.storage.user.get("referrer_path", "/"))  # go back to where the user wanted to go
         else:

@@ -95,8 +95,35 @@ class Watcher:
             pass
 
     async def mitrailles(self, pair: str, start_price: float):
-        mitraille_range = float((await models.Settings.get(key=models.Settings.Keys.MITRAILLE_PERCENTAGE)).value)
-        mitraille_quantity = float((await models.Settings.get(key=models.Settings.Keys.MITRAILLE_QUANTITY)).value)
+        mitraille_range = float((await models.Settings.get(key=models.Settings.Keys.MITRAILLE_PERCENTAGE)).value) / 100
+        mitraille_quantity = int((await models.Settings.get(key=models.Settings.Keys.MITRAILLE_QUANTITY)).value)
+        quantity = float((await models.Settings.get(key=models.Settings.Keys.BUY_AMOUNT)).value)
+        asset_detail = await models.Market.get(pair=pair)
+        for index in range(1, mitraille_quantity + 1):
+            target_price = (
+                (start_price - (start_price * (index / mitraille_quantity) * mitraille_range))
+                // float(asset_detail.tick_price)
+                * float(asset_detail.tick_price)
+            )
+            buy_quantity = (
+                (quantity / target_price) // float(asset_detail.tick_quantity) * float(asset_detail.tick_quantity)
+            )
+            try:
+                self.client.new_order(
+                    symbol=pair,
+                    side="BUY",
+                    type="LIMIT",
+                    timeInForce="GTC",
+                    quantity=(format(round(buy_quantity, 8), "g")),
+                    price=(format(round(target_price, 8), "g")),
+                )
+
+            except ClientError as e:
+                if e.error_code == -2010 and "insufficient balance" in e.error_message:
+                    print("Insufficient balance")
+                    break
+                else:
+                    print(f"Order Refused: {pair} code={e.error_code}, message={e.error_message}")
 
     async def get_lessper(self):
         lessper = float((await models.Settings.get(key=models.Settings.Keys.LESSPER_DEFAULT)).value)
@@ -333,5 +360,7 @@ if __name__ == "__main__":
 
     watcher = Watcher(api_key=os.environ["BINANCE_API_KEY"], api_secret=os.environ["BINANCE_API_SECRET"])
 
-    pp(asyncio.run(watcher.delist_exit()))
+    data = asyncio.run(watcher.strat_compute_entry())
+    for entry in data:
+        print(entry)
     asyncio.run(DB.close())
