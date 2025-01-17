@@ -12,9 +12,10 @@ from fastapi.responses import RedirectResponse
 from nicegui import app, events, ui
 from nicegui.elements.input import Input
 from starlette.middleware.base import BaseHTTPMiddleware
+from views.command_view import CommandView
 from views.slots import Slots
 
-VERSION = "0.2.0"
+VERSION = "0.3.0"
 NUMBER_OF_ITEMS = 20
 AUTHENTICATION = os.environ["AUTHENTICATION_HASH"]
 BINANCE_API_KEY = os.environ["BINANCE_API_KEY"]
@@ -29,6 +30,7 @@ print("SKIP_INIT_ENTRIE", SKIP_INIT_ENTRIES)
 UNRESTRICTED_PAGE_ROUTES = {"/login"}
 _initdb = initdb.InitDB(api_key=BINANCE_API_KEY, api_secret=BINANCE_API_SECRET)
 _watcher = watcher.Watcher(api_key=BINANCE_API_KEY, api_secret=BINANCE_API_SECRET)
+_commands = CommandView(api_key=BINANCE_API_KEY, api_secret=BINANCE_API_SECRET)
 
 
 class AuthMiddleware(BaseHTTPMiddleware):
@@ -177,8 +179,8 @@ async def index():
         with ui.tabs() as tabs:
             ui.tab("Home")
             ui.tab("Open orders")
+            ui.tab("Commands")
             ui.tab("Settings")
-            # ui.tab("Controls")
         with ui.row().classes("items-center absolute-right"):
             ui.label(f"pomato {VERSION}")
             ui.button(on_click=logout, icon="logout").props("outline round")
@@ -191,6 +193,7 @@ async def index():
         with ui.tab_panel("Open orders"):
             ui.button("Refresh", on_click=panel_open_orders.refresh)
             await panel_open_orders()  # type: ignore
+        await _commands.render()
         with ui.tab_panel("Settings"):
             with ui.table(
                 rows=await models.Settings.all().values(), columns=models.Settings.nicegui_repr()
