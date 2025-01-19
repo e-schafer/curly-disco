@@ -11,5 +11,6 @@ if __name__ == "__main__":
     spot = Spot(api_key, api_secret)
 
     # response = spot.new_order(symbol="USUALUSDT", side="BUY", type="LIMIT", quantity=20, price=0.48, timeInForce="GTC")
-    response = spot.cancel_open_orders(symbol="USUALUSDT")
+    # response = spot.cancel_open_orders(symbol="USUALUSDT")
+    response = spot.get_orders("BIOUSDT")
     pp(response)

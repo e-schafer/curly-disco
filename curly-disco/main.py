@@ -4,19 +4,19 @@ from hashlib import sha256
 from typing import Optional
 
 import initdb
-import models
 import watcher
 from db import DB
 from fastapi import Request
 from fastapi.responses import RedirectResponse
-from nicegui import app, events, ui
+from nicegui import app, ui
 from nicegui.elements.input import Input
 from starlette.middleware.base import BaseHTTPMiddleware
-from views.command_view import CommandView
-from views.slots import Slots
+from views.asset import AssetView
+from views.command import CommandView
+from views.orders import OrdersView, TradesView
+from views.settings import SettingsView
 
 VERSION = "0.3.0"
-NUMBER_OF_ITEMS = 20
 AUTHENTICATION = os.environ["AUTHENTICATION_HASH"]
 BINANCE_API_KEY = os.environ["BINANCE_API_KEY"]
 BINANCE_API_SECRET = os.environ["BINANCE_API_SECRET"]
@@ -26,11 +26,16 @@ DISABLE_WATCHER = True if os.getenv("DISABLE_WATCHER", "").lower() == "true" els
 
 print("SKIP_INIT_HISTORIC", SKIP_INIT_HISTORIC)
 print("SKIP_INIT_ENTRIE", SKIP_INIT_ENTRIES)
+print("DISABLE_WATCHER", DISABLE_WATCHER)
 
 UNRESTRICTED_PAGE_ROUTES = {"/login"}
 _initdb = initdb.InitDB(api_key=BINANCE_API_KEY, api_secret=BINANCE_API_SECRET)
 _watcher = watcher.Watcher(api_key=BINANCE_API_KEY, api_secret=BINANCE_API_SECRET)
 _commands = CommandView(api_key=BINANCE_API_KEY, api_secret=BINANCE_API_SECRET)
+_orders = OrdersView(api_key=BINANCE_API_KEY, api_secret=BINANCE_API_SECRET)
+_trades = TradesView(api_key=BINANCE_API_KEY, api_secret=BINANCE_API_SECRET)
+_assets = AssetView(api_key=BINANCE_API_KEY, api_secret=BINANCE_API_SECRET)
+_settings = SettingsView()
 
 
 class AuthMiddleware(BaseHTTPMiddleware):
@@ -58,12 +63,13 @@ async def startup():
     await _initdb.init_assets()
     if not SKIP_INIT_HISTORIC:
         await _initdb.init_orders_and_trades()
-    if not SKIP_INIT_ENTRIES:
-        await _watcher.strat_compute_entry()
     if not DISABLE_WATCHER:
+        _watcher.start_watch()
         _watcher.loop_entries()  # type: ignore
         _watcher.loop_exit()  # type: ignore
+    if not SKIP_INIT_ENTRIES:
         await _watcher.strat_loop_compute_exit()
+        await _watcher.strat_loop_compute_entry()
 
 
 @app.on_exception
@@ -80,95 +86,6 @@ async def shutdown():
     await DB.close()
 
 
-@ui.refreshable
-async def panel_home() -> None:
-    liquidity = await _watcher.get_liquidity()
-    with ui.row():
-        with ui.card().props("flat bordered"):
-            ui.label("Total gains")
-            ui.label(f"{round(liquidity['total_gains'],2)}$")
-        with ui.card().props("flat bordered"):
-            ui.label("Open gains")
-            open_gains = round(liquidity["market_value"] - liquidity["bought"], 2)
-            gains_label = ui.label(f"{open_gains}$")
-            if open_gains > 0:
-                gains_label.classes("text-positive")
-            else:
-                gains_label.classes("text-negative")
-        with ui.card().props("flat bordered"):
-            ui.label("Market value")
-            ui.label(f"{round(liquidity['market_value'],2)}$")
-        with ui.card().props("flat bordered"):
-            ui.label("Liquidity engaged")
-            ui.label(f"{round(liquidity['bought'],2)}$")
-        with ui.card().props("flat bordered"):
-            ui.label("Liquidity locked")
-            ui.label(f"{round(liquidity['locked'],2)}$")
-        with ui.card().props("flat bordered"):
-            ui.label("Liquidity available")
-            ui.label(f"{round(liquidity['free'],2)}$")
-    ui.label("Current assets")
-    await _watcher.update_assets_gains()
-    assets = await models.Assets.all().values()
-    with ui.table(
-        columns=models.Assets.nicegui_repr(),
-        rows=assets,
-        row_key="id",
-        pagination=NUMBER_OF_ITEMS,
-    ) as home_table:
-        home_table.add_slot("loading", "True")
-        home_table.add_slot("body-cell-gains", Slots.slot_red_green("gains", "$"))
-        home_table.add_slot("body-cell-gains_percentage", Slots.slot_red_green("gains_percentage", "%"))
-        # home_table.add_slot("body-cell-updated_at", slot_timestamp("updated_at"))
-    return None
-
-
-@ui.refreshable
-async def panel_open_orders() -> None:
-    order_columns = [
-        {"name": "Pair", "label": "pair", "field": "pair", "sortable": True},
-        {"name": "Quantity", "label": "quantity", "field": "quantity", "sortable": True},
-        {"name": "Current price", "label": "current", "field": "current_price", "sortable": True},
-        {"name": "Target price", "label": "target", "field": "target_price", "sortable": True},
-        {"name": "Far", "label": "far", "field": "far", "sortable": True},
-    ]
-    open_orders = await _watcher.get_opened_orders()
-    ui.table(columns=order_columns, rows=open_orders, pagination=NUMBER_OF_ITEMS, row_key="pair")
-    return None
-
-
-@ui.refreshable
-async def panel_trades() -> None:
-    trades = await models.Trades.all().values()
-    trades.sort(key=lambda x: x["closed_at"], reverse=True)
-    with ui.table(
-        columns=models.Trades.nicegui_repr(), rows=trades, pagination=NUMBER_OF_ITEMS, row_key="id"
-    ) as trades_table:
-        trades_table.add_slot("body-cell-gains", Slots.slot_red_green("gains", "$"))
-        trades_table.add_slot("body-cell-gains_percentage", Slots.slot_red_green("gains_percentage", "%"))
-    return None
-
-
-async def manual_update_assets():
-    ui.notify("Updating assets...")
-    await _initdb.init_assets()
-    ui.notify("Assets updated!")
-
-
-async def manual_update_market():
-    ui.notify("Updating market...")
-    await _initdb.init_market()
-    ui.notify("Market updated!")
-
-
-async def update_settings(e: events.GenericEventArguments):
-    ui.notify("Updating settings...")
-    if setting := await models.Settings.get_or_none(key=e.args["key"]):
-        setting.value = e.args["value"]
-        await setting.save()
-        ui.notify("Settings updated!")
-
-
 @ui.page("/", title="Curly Disco", response_timeout=20.0)
 async def index():
     def logout() -> None:
@@ -178,43 +95,20 @@ async def index():
     with ui.header().classes(replace="row items-center"):
         with ui.tabs() as tabs:
             ui.tab("Home")
-            ui.tab("Open orders")
-            ui.tab("Commands")
+            ui.tab("Orders")
             ui.tab("Settings")
         with ui.row().classes("items-center absolute-right"):
             ui.label(f"pomato {VERSION}")
             ui.button(on_click=logout, icon="logout").props("outline round")
     with ui.tab_panels(tabs, value="Home"):
         with ui.tab_panel("Home"):
-            ui.button("Refresh", on_click=panel_home.refresh)
-            await panel_home()  # type: ignore
-            ui.button("Refresh", on_click=panel_trades.refresh)
-            await panel_trades()  # type: ignore
-        with ui.tab_panel("Open orders"):
-            ui.button("Refresh", on_click=panel_open_orders.refresh)
-            await panel_open_orders()  # type: ignore
-        await _commands.render()
+            await _assets.render()
+            await _trades.render()
+        with ui.tab_panel("Orders"):
+            await _orders.render()
+            await _commands.render()
         with ui.tab_panel("Settings"):
-            with ui.table(
-                rows=await models.Settings.all().values(), columns=models.Settings.nicegui_repr()
-            ) as settings_table:
-                settings_table.add_slot(
-                    "body-cell-value",
-                    """
-                    <q-td key="value" :props="props">
-                    {{ props.row.value }}
-                    <q-popup-edit v-model="props.row.value" v-slot="scope"  @update:model-value="() => $parent.$emit('update', props.row)">
-                    <q-input v-model.number="scope.value" type="number"  dense autofocus counter @keyup.enter="scope.set" />
-                    </q-popup-edit>
-                    </q-td>""",
-                )
-                settings_table.on("update", update_settings)
-
-        with ui.tab_panel("Controls"):
-            ui.label("Controls")
-            ui.button("Resync assets", on_click=lambda: manual_update_assets())
-            # ui.button("Resync trades", on_click=lambda: manual_update_trades())
-            ui.button("Resync market", on_click=lambda: manual_update_market())
+            await _settings.render()
 
 
 @ui.page("/login")

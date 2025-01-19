@@ -8,14 +8,14 @@ class Slots:
         """.format("{{ props.value }}")
 
     @staticmethod
-    def slot_red_green(col_name: str, symbol: str = "%"):
+    def slot_red_green(col_name: str, symbol: str = "%", condition: str = "props.value < 0 ? 'red':'green'"):
         return """
         <q-td align="middle">
-            <q-badge key="{0}" :props="props" outline  :color="props.value < 0 ? 'red':'green'">
-                {1} {2}
+            <q-badge key="{0}" :props="props" outline  :color="{1}">
+                {2} {3}
             </q-badge>
         </q-td>
-        """.format(col_name, "{{props.value.toFixed(2)}}", symbol)
+        """.format(col_name, condition, "{{props.value.toFixed(2)}}", symbol)
 
     @staticmethod
     def slot_timestamp(col_name: str):
@@ -26,13 +26,3 @@ class Slots:
             </q-badge>
         </q-td>
         """.format(col_name, "{{typeof(props.value)}}")
-
-    @staticmethod
-    def slot_far(col_name: str):
-        return """
-        <q-td align="middle">
-            <q-badge key="{0}" :props="props" outline  :color="props.value < 0 ? 'red':'green'">
-                {{props.value.toFixed(2)}} %
-            </q-badge>
-        </q-td>
-        """.format(col_name)

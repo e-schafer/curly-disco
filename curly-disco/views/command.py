@@ -1,12 +1,14 @@
 import models
 from binance.error import ClientError
-from binance.spot import Spot
+from cex import ExchangeInterface
 from nicegui import ui
 
 
-class CommandView:
+class CommandView(ExchangeInterface):
+    PANEL_NAME = "Commands"
+
     def __init__(self, api_key, api_secret):
-        self.client = Spot(api_key, api_secret)
+        super().__init__(api_key, api_secret)
 
     async def __confirm_cancel(self):
         with ui.dialog() as dialog, ui.card():
@@ -27,6 +29,11 @@ class CommandView:
                 ui.notify(f"Error cancelling order: {e}", level="error", color="red")
         ui.notify(f"{len(orders)} orders cancelled", level="warning")
 
+    # async def __manual_update_market():
+    #     ui.notify("Updating market...", type="ongoing")
+    #     await _initdb.init_market()
+    #     ui.notify("Market updated!")
+
     def __put_order(self, symbol: str, side: str, type: str, quantity: float, price: float):
         print(f"put order: pair={symbol}, side={side}, type={type}, quantity={quantity}, price={price}")
         try:
@@ -35,10 +42,10 @@ class CommandView:
                 "side": side,
                 "type": type,
                 "quantity": quantity,
-                "price": price,
             }
             if type == "LIMIT":
                 order["timeInForce"] = "GTC"
+                order["price"] = price
             response = self.client.new_order(**order)
             ui.notify(f"Order placed for {response['symbol']}", level="info", color="green")
         except Exception as e:
@@ -53,32 +60,35 @@ class CommandView:
             return False
 
     async def render(self):
-        with ui.tab_panel("Commands"):
-            # add market buy order select from model.Markets
-            with ui.row():
-                select_pair = ui.select(
-                    label="Pair", options=await models.Market.all().values_list("pair", flat=True), with_input=True
+        # add market buy order select from model.Markets
+        with ui.row():
+            select_pair = ui.select(
+                label="Pair", options=await models.Market.all().values_list("pair", flat=True), with_input=True
+            )
+            select_side = ui.select(label="Side", options=["BUY", "SELL"], with_input=True)
+            select_type = ui.select(label="Type", options=["MARKET", "LIMIT"], with_input=True)
+            input_qty = ui.input(
+                label="Quantity",
+                placeholder="0.0",
+                validation={"Not a number": lambda x: self.__validate_number(x)},
+            ).props("clearable")
+            input_price = ui.input(
+                label="Price",
+                placeholder="0.0",
+                validation={"Not a number": lambda x: self.__validate_number(x)},
+            ).props("clearable")
+            ui.button("Put Order", icon="add").on_click(
+                lambda: self.__put_order(
+                    symbol=select_pair.value,
+                    side=select_side.value,
+                    type=select_type.value,
+                    quantity=input_qty.value,
+                    price=input_price.value,
                 )
-                select_side = ui.select(label="Side", options=["BUY", "SELL"], with_input=True)
-                select_type = ui.select(label="Type", options=["MARKET", "LIMIT"], with_input=True)
-                input_qty = ui.input(
-                    label="Quantity",
-                    placeholder="0.0",
-                    validation={"Not a number": lambda x: self.__validate_number(x)},
-                ).props("clearable")
-                input_price = ui.input(
-                    label="Price",
-                    placeholder="0.0",
-                    validation={"Not a number": lambda x: self.__validate_number(x)},
-                ).props("clearable")
-                ui.button("Put Order", icon="add").on_click(
-                    lambda: self.__put_order(
-                        symbol=select_pair.value,
-                        side=select_side.value,
-                        type=select_type.value,
-                        quantity=input_qty.value,
-                        price=input_price.value,
-                    )
-                )
-            # cancel all orders
+            )
+        # cancel all orders
+        with ui.row():
             ui.button("Cancel all orders", color="red").on_click(self.__confirm_cancel)
+            # ui.button("Resync assets", on_click=lambda: manual_update_assets())
+            # # ui.button("Resync trades", on_click=lambda: manual_update_trades())
+            # ui.button("Resync market", on_click=lambda: manual_update_market())
