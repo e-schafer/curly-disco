@@ -10,15 +10,15 @@ class CommandView(ExchangeInterface):
     def __init__(self, api_key, api_secret):
         super().__init__(api_key, api_secret)
 
-    async def __confirm_cancel(self):
+    async def __confirm_cancel(self, message="Are you sure?", funct=None):
         with ui.dialog() as dialog, ui.card():
-            ui.label("Are you sure?")
-            with ui.row():
+            ui.label(message)
+            with ui.row(align_items="center"):
                 ui.button("Yes", on_click=lambda: dialog.submit(True))
                 ui.button("No", on_click=lambda: dialog.submit(False))
         result = await dialog
         if result:
-            self.__cancel_all_orders()
+            funct()
 
     def __cancel_all_orders(self):
         orders = self.client.get_open_orders()
@@ -26,13 +26,18 @@ class CommandView(ExchangeInterface):
             try:
                 self.client.cancel_order(symbol=order["symbol"], orderId=order["orderId"])
             except ClientError as e:
-                ui.notify(f"Error cancelling order: {e}", level="error", color="red")
+                ui.notify(f"Error cancelling order: {e}", level="warning", color="red")
         ui.notify(f"{len(orders)} orders cancelled", level="warning")
 
-    # async def __manual_update_market():
-    #     ui.notify("Updating market...", type="ongoing")
-    #     await _initdb.init_market()
-    #     ui.notify("Market updated!")
+    def __cancel_all_buy(self):
+        orders = self.client.get_open_orders()
+        for order in orders:
+            if order["side"] == "BUY":
+                try:
+                    self.client.cancel_order(symbol=order["symbol"], orderId=order["orderId"])
+                except ClientError as e:
+                    ui.notify(f"Error cancelling order: {e}", level="warning", color="red")
+        ui.notify(f"{len(orders)} orders cancelled", level="warning")
 
     def __put_order(self, symbol: str, side: str, type: str, quantity: float, price: float):
         print(f"put order: pair={symbol}, side={side}, type={type}, quantity={quantity}, price={price}")
@@ -88,7 +93,12 @@ class CommandView(ExchangeInterface):
             )
         # cancel all orders
         with ui.row():
-            ui.button("Cancel all orders", color="red").on_click(self.__confirm_cancel)
+            ui.button("Cancel all orders", color="red").on_click(
+                lambda: self.__confirm_cancel("Cancel all orders.\nAre you sure?", self.__cancel_all_orders)
+            )
+            ui.button("Cancel all buy orders", color="red").on_click(
+                lambda: self.__confirm_cancel("Cancel all buy orders.\nAre you sure?", self.__cancel_all_buy)
+            )
             # ui.button("Resync assets", on_click=lambda: manual_update_assets())
             # # ui.button("Resync trades", on_click=lambda: manual_update_trades())
             # ui.button("Resync market", on_click=lambda: manual_update_market())

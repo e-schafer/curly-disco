@@ -7,8 +7,22 @@ from views.slots import Slots
 
 
 class OrdersView(ExchangeInterface):
+    ORDERS_SCHEMA = [
+        {"name": "ID", "label": "id", "field": "id", "sortable": True},
+        {"name": "Pair", "label": "pair", "field": "pair", "sortable": True},
+        {"name": "Side", "label": "side", "field": "side", "sortable": True},
+        {"name": "Type", "label": "type", "field": "type", "sortable": True},
+        {"name": "Quantity", "label": "quantity", "field": "quantity", "sortable": True},
+        {"name": "Current price", "label": "current", "field": "current_price", "sortable": True},
+        {"name": "Target price", "label": "target", "field": "target_price", "sortable": True},
+        {"name": "Far", "label": "far", "field": "far", "sortable": True},
+    ]
+
     def __init__(self, api_key, api_secret):
         super().__init__(api_key, api_secret)
+        self.orders_table = ui.table(
+            columns=self.ORDERS_SCHEMA, rows=[], pagination=super().NUMBER_OF_ITEMS, row_key="pair"
+        )
 
     async def get_open_orders(self):
         orders = self.client.get_open_orders()
@@ -36,33 +50,33 @@ class OrdersView(ExchangeInterface):
 
     @ui.refreshable
     async def panel_open_orders(self):
-        order_columns = [
-            {"name": "ID", "label": "id", "field": "id", "sortable": True},
-            {"name": "Pair", "label": "pair", "field": "pair", "sortable": True},
-            {"name": "Side", "label": "side", "field": "side", "sortable": True},
-            {"name": "Type", "label": "type", "field": "type", "sortable": True},
-            {"name": "Quantity", "label": "quantity", "field": "quantity", "sortable": True},
-            {"name": "Current price", "label": "current", "field": "current_price", "sortable": True},
-            {"name": "Target price", "label": "target", "field": "target_price", "sortable": True},
-            {"name": "Far", "label": "far", "field": "far", "sortable": True},
-        ]
         open_orders = await self.get_open_orders()
-        ui.table(
-            columns=order_columns,
+        self.orders_table = ui.table(
+            columns=self.ORDERS_SCHEMA,
             rows=open_orders,
             pagination=super().NUMBER_OF_ITEMS,
             row_key="pair",
-        ).add_slot(
-            "body-cell-side",
-            Slots.slot_red_green(
-                "side",
-                "",
-                condition="""props.value = 'SELL' ? 'red':'green'""",
-            ),
+            selection="multiple",
         )
+        self.orders_table.add_slot(
+            "body-cell-side", Slots.slot_red_green("side", "", condition="props.value = 'SELL' ? 'red':'green'")
+        )
+        self.orders_table.add_slot("body-cell-far", Slots.slot_red_green("far", "%"))
+
+    def __remove_selected_orders(self):
+        selected_orders = self.orders_table.selected
+        for order in selected_orders:
+            try:
+                self.client.cancel_order(symbol=order["pair"], orderId=order["id"])
+            except Exception as e:
+                ui.notify(f"Error cancelling order: {e}", level="warning", color="red")
+        ui.notify("orders cancelled", level="info")
 
     async def render(self):
-        ui.button("Refresh", on_click=self.panel_open_orders.refresh)
+        with ui.row():
+            ui.button("Refresh", on_click=self.panel_open_orders.refresh)
+            ui.button("Delete selected orders", on_click=self.__remove_selected_orders, color="red")
+
         await self.panel_open_orders()
 
 
