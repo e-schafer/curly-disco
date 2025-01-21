@@ -24,7 +24,7 @@ class OrdersView(ExchangeInterface):
             columns=self.ORDERS_SCHEMA, rows=[], pagination=super().NUMBER_OF_ITEMS, row_key="pair"
         )
 
-    async def get_open_orders(self):
+    async def __get_open_orders(self):
         orders = self.client.get_open_orders()
         opened_orders = []
         if orders:
@@ -32,7 +32,7 @@ class OrdersView(ExchangeInterface):
             for order in orders:
                 target_price = float(order["price"])
                 current_price = prices[order["symbol"]]
-                far = ((float(prices[order["symbol"]]) / target_price) - 1) * 100 if target_price else None
+                far = ((float(prices[order["symbol"]]) / target_price) - 1) * 100 if target_price else -99.0
                 opened_orders.append(
                     {
                         "id": order["orderId"],
@@ -40,9 +40,9 @@ class OrdersView(ExchangeInterface):
                         "side": order["side"],
                         "type": order["type"],
                         "quantity": order["origQty"],
-                        "target_price": target_price,
+                        "target_price": format(target_price, "g"),
                         "current_price": current_price,
-                        "far": far,
+                        "far": format(round(far, 2), "g"),
                     }
                 )
 
@@ -50,18 +50,19 @@ class OrdersView(ExchangeInterface):
 
     @ui.refreshable
     async def panel_open_orders(self):
-        open_orders = await self.get_open_orders()
+        open_orders = await self.__get_open_orders()
         self.orders_table = ui.table(
             columns=self.ORDERS_SCHEMA,
             rows=open_orders,
             pagination=super().NUMBER_OF_ITEMS,
-            row_key="pair",
+            row_key="id",
             selection="multiple",
         )
-        self.orders_table.add_slot(
-            "body-cell-side", Slots.slot_red_green("side", "", condition="props.value = 'SELL' ? 'red':'green'")
-        )
         self.orders_table.add_slot("body-cell-far", Slots.slot_red_green("far", "%"))
+        # self.orders_table.add_slot(
+        #     "body-cell-side",
+        #     Slots.slot_red_green("side", ".", condition="""props.value === "BUY" ? "green" : "red" """),
+        # )
 
     def __remove_selected_orders(self):
         selected_orders = self.orders_table.selected
@@ -71,6 +72,7 @@ class OrdersView(ExchangeInterface):
             except Exception as e:
                 ui.notify(f"Error cancelling order: {e}", level="warning", color="red")
         ui.notify("orders cancelled", level="info")
+        self.panel_open_orders.refresh()
 
     async def render(self):
         with ui.row():

@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Literal
 
 import models
 from cex import ExchangeInterface
@@ -10,6 +11,7 @@ from .slots import Slots
 class AssetView(ExchangeInterface):
     def __init__(self, api_key, api_secret):
         super().__init__(api_key, api_secret)
+        self.asset_table = None
 
     async def init_assets(self):
         ui.notify("Synchronisation started", level="ongoing")
@@ -81,20 +83,42 @@ class AssetView(ExchangeInterface):
                 ui.label("Liquidity available")
                 ui.label(f"{round(liquidity['free'],2)}$")
         ui.label("Current assets")
-        with ui.table(
+        self.asset_table = ui.table(
             columns=models.Assets.nicegui_repr(),
             rows=assets,
             row_key="id",
             pagination=super().NUMBER_OF_ITEMS,
-        ) as asset_table:
-            asset_table.add_slot("loading", "True")
-            asset_table.add_slot("body-cell-gains", Slots.slot_red_green("gains", "$"))
-            asset_table.add_slot("body-cell-gains_percentage", Slots.slot_red_green("gains_percentage", "%"))
-            # home_table.add_slot("body-cell-updated_at", slot_timestamp("updated_at"))
+            selection="multiple",
+        )
+        self.asset_table.add_slot("loading", "True")
+        self.asset_table.add_slot("body-cell-gains", Slots.slot_red_green("gains", "$"))
+        self.asset_table.add_slot("body-cell-gains_percentage", Slots.slot_red_green("gains_percentage", "%"))
+        # home_table.add_slot("body-cell-updated_at", slot_timestamp("updated_at"))
         return None
 
+    async def __sell_selected_assets(self, type=Literal["MARKET", "LIMIT"]):
+        selected_assets = self.asset_table.selected
+        for asset in selected_assets:
+            payload = {
+                "symbol": asset["id"],
+                "side": "SELL",
+                "type": type,
+                "quantity": asset["token_quantity"],
+            }
+            if type == "LIMIT":
+                payload["price"] = asset["buy_unit_price"]
+                payload["timeInForce"] = "GTC"
+            try:
+                self.client.new_order(**payload)
+                ui.notify(f"{type} sell order for {asset['id']} send", level="info")
+            except Exception as e:
+                ui.notify(f"Error selling asset: {e}", level="warning", color="red")
+        self.asset_view.refresh()
+
     async def render(self):
-        with ui.row():
+        with ui.row(align_items="stretch"):
             ui.button("Refresh", on_click=self.asset_view.refresh)
-            ui.button("Synchronisation", on_click=self.init_assets, color="red")
+            ui.button("Synchronisation", on_click=self.init_assets, color="green")
+            ui.button("Sell market", on_click=lambda: self.__sell_selected_assets(type="MARKET"), color="red")
+            ui.button("Sell break even", on_click=lambda: self.__sell_selected_assets(type="LIMIT"), color="red")
         await self.asset_view()
