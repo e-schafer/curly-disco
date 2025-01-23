@@ -205,6 +205,6 @@ if __name__ == "__main__":
         api_key=os.environ["BINANCE_API_KEY"],
         api_secret=os.environ["BINANCE_API_SECRET"],
     )
-    asyncio.run(bot.init_assets())
+    asyncio.run(bot.first_run())
 
     asyncio.run(DB.close())

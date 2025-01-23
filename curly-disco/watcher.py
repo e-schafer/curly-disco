@@ -2,11 +2,9 @@ import asyncio
 import os
 from datetime import datetime
 from itertools import chain
-from pprint import pp
 from statistics import mean
 
 import models
-import tortoise.functions as tf
 from binance.error import ClientError
 from binance.spot import Spot
 from binance.websocket.spot.websocket_stream import SpotWebsocketStreamClient
@@ -17,12 +15,18 @@ from fastapi_utilities import repeat_at
 class Watcher:
     def __init__(self, api_key, api_secret):
         self.client: Spot = Spot(api_key, api_secret)
-
         self.ws_client = SpotWebsocketStreamClient(on_message=self.on_message)
-        self.listen_key = self.client.new_listen_key()["listenKey"]
-        self.ws_client.user_data(listen_key=self.listen_key)
+
+    def start_watch(self):
+        listen_key = self.client.new_listen_key()["listenKey"]
+        self.ws_client.user_data(listen_key=listen_key)
+
+    def stop_watch(self):
+        self.ws_client.stop()
 
     async def on_message(self, _, msg):
+        print(f"on_message: {msg}")
+        print(f"on_message _: {_}")
         match msg["e"]:
             case "executionReport":
                 await self.handle_execution_report(msg)
@@ -35,16 +39,16 @@ class Watcher:
         pair = msg["s"]
         token_qty = float(msg["q"])
         quote_qty = float(msg["p"])
-
+        base_unit_price = float(msg["p"])
         if msg["X"] != "FILLED":
             return
         asset = await models.Assets().get(id=pair)
-
+        print(f"Order: {msg['i']} {msg['S']} {pair} {token_qty} {quote_qty} {base_unit_price}")
         await models.Orders.create(
             id=msg["i"],
             pair=pair,
             side=msg["S"],
-            base_unit_price=msg["p"],
+            base_unit_price=base_unit_price,
             token_quantity=msg["q"],
             quote_quantity=msg["p"] * msg["q"],
             timestamp=datetime.fromtimestamp(msg["T"] / 1000),
@@ -68,7 +72,7 @@ class Watcher:
                     market_value=token_qty * quote_qty,
                     opened_at=datetime.fromtimestamp(msg["T"] / 1000),
                 )
-                # trigger mitraille order
+                # await self.mitrailles(pair, base_unit_price)
 
         elif msg["S"] == "SELL":
             if asset:
@@ -93,6 +97,37 @@ class Watcher:
             pass
         else:
             pass
+
+    async def mitrailles(self, pair: str, start_price: float):
+        mitraille_range = float((await models.Settings.get(key=models.Settings.Keys.MITRAILLE_PERCENTAGE)).value) / 100
+        mitraille_quantity = int((await models.Settings.get(key=models.Settings.Keys.MITRAILLE_QUANTITY)).value)
+        quantity = float((await models.Settings.get(key=models.Settings.Keys.BUY_AMOUNT)).value)
+        asset_detail = await models.Market.get(pair=pair)
+        for index in range(1, mitraille_quantity + 1):
+            target_price = (
+                (start_price - (start_price * (index / mitraille_quantity) * mitraille_range))
+                // float(asset_detail.tick_price)
+                * float(asset_detail.tick_price)
+            )
+            buy_quantity = (
+                (quantity / target_price) // float(asset_detail.tick_quantity) * float(asset_detail.tick_quantity)
+            )
+            try:
+                self.client.new_order(
+                    symbol=pair,
+                    side="BUY",
+                    type="LIMIT",
+                    timeInForce="GTC",
+                    quantity=(format(round(buy_quantity, 8), "g")),
+                    price=(format(round(target_price, 8), "g")),
+                )
+
+            except ClientError as e:
+                if e.error_code == -2010 and "insufficient balance" in e.error_message:
+                    print("Insufficient balance")
+                    break
+                else:
+                    print(f"Order Refused: {pair} code={e.error_code}, message={e.error_message}")
 
     async def get_lessper(self):
         lessper = float((await models.Settings.get(key=models.Settings.Keys.LESSPER_DEFAULT)).value)
@@ -129,8 +164,10 @@ class Watcher:
         threshold = float((await models.Settings.get(key=models.Settings.Keys.WEEKLY_DEVIATION_PERCENTAGE)).value) / 100
         buy_amount = float((await models.Settings.get(key=models.Settings.Keys.BUY_AMOUNT)).value)
         market = await models.Market.filter(is_black_listed=False).all()
+        pairs_to_skip = await models.Assets.all().values_list("id", flat=True)
         pairs = _pairs if _pairs else [x.pair for x in market]
-
+        # Remove pairs that are already in the assets
+        [pairs.remove(x) for x in pairs_to_skip if x in pairs]
         lessper = await self.get_lessper()
         positions = []
 
@@ -142,7 +179,7 @@ class Watcher:
             moving_average = list(map(lambda x: (float(x[2]) + float(x[3])) / 2, ticks[:-1]))
             moving_delta = (max(moving_average) / min(moving_average)) - 1
             asset = [x for x in market if x.pair == pair][0]
-            if moving_delta < float(threshold):
+            if moving_delta < threshold:
                 positions.append(
                     {
                         "pair": pair,
@@ -198,25 +235,6 @@ class Watcher:
         )
         return prices
 
-    async def get_opened_buy_orders(self) -> list[dict]:
-        orders = self.client.get_open_orders()
-        opened_orders = []
-        if orders:
-            prices = await self.pairs_to_prices([x["symbol"] for x in orders])
-            for order in orders:
-                opened_orders.append(
-                    {
-                        "pair": order["symbol"],
-                        "side": order["side"],
-                        "type": order["type"],
-                        "quantity": order["origQty"],
-                        "target_price": (target_price := float(order["price"])),
-                        "current_price": (current_price := prices[order["symbol"]]),
-                        "far": ((float(current_price) / target_price) - 1) * 100,
-                    }
-                )
-        return opened_orders
-
     async def update_assets_gains(self):
         assets = await models.Assets().all()
         if assets:
@@ -238,23 +256,27 @@ class Watcher:
         print(f"Strat loop exit {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         await self.update_assets_gains()
         await self.delist_exit()
+        open_orders = list(filter(lambda x: x["side"] == "SELL", self.client.get_open_orders()))
+
         assets = await models.Assets().all()
         sell_gains_percentage = float((await models.Settings.get(key=models.Settings.Keys.SELL_GAINS_PERCENTAGE)).value)
-        sell_trailing_stop = float((await models.Settings.get(key=models.Settings.Keys.SELL_TRAILING_STOP)).value)
+        sell_trailing_stop = int((await models.Settings.get(key=models.Settings.Keys.SELL_TRAILING_STOP)).value) * 100
         for asset in assets:
+            sell_orders = list(filter(lambda x: x["symbol"] == asset.id, open_orders))
             print(f"Checking exit for {asset.id} {asset.gains_percentage}")
-            if asset.gains_percentage >= sell_gains_percentage:
+            if asset.gains_percentage >= sell_gains_percentage and not sell_orders:
                 try:
                     self.client.new_order(
                         symbol=asset.id,
                         side="SELL",
                         type="TAKE_PROFIT",
-                        timeInForce="GTC",
                         quantity=asset.token_quantity,
                         trailingDelta=sell_trailing_stop,
                     )
                 except ClientError as e:
                     print(f"Order Refused: {asset.id} code={e.error_code}, message={e.error_message}")
+                except Exception as e:
+                    print(f"Error on placing order for {asset.id}: {e}")
         return True
 
     async def delist_exit(self):
@@ -282,37 +304,15 @@ class Watcher:
                 except ClientError as err:
                     print(f"Delist: Failed to sell on {symbol}.{err.error_code} {err.error_message}")
 
-    async def get_liquidity(self):
-        liquidity = {
-            "locked": 0.0,
-            "free": 0.0,
-            "bought": 0.0,
-            "market_value": 0.0,
-            "total_gains": 0.0,
-        }
-        asset = (
-            await models.Assets.annotate(
-                crypto_bought=tf.Sum("quote_quantity"),
-                market_value=tf.Sum("market_value"),
-            )
-            .first()
-            .values()
-        )
-        trades = await models.Trades.annotate(gains=tf.Sum("gains")).first().values()
-        if trades:
-            liquidity["total_gains"] = float(trades["gains"] if trades["gains"] else 0)
-        liquidity["bought"] = float(asset["crypto_bought"])
-        liquidity["market_value"] = float(asset["market_value"]) + liquidity["free"] + liquidity["locked"]
-        if usdt := self.client.user_asset(asset="USDT"):
-            liquidity["locked"] = float(usdt[0]["locked"])
-            liquidity["free"] = float(usdt[0]["free"])
-        return liquidity
-
 
 if __name__ == "__main__":
     asyncio.run(DB.init())
 
     watcher = Watcher(api_key=os.environ["BINANCE_API_KEY"], api_secret=os.environ["BINANCE_API_SECRET"])
 
-    pp(asyncio.run(watcher.delist_exit()))
+    data = asyncio.run(watcher.strat_compute_entry())
+    with open("data.json", "w") as f:
+        for d in data:
+            f.write(str(d))
+    watcher.ws_client.stop()
     asyncio.run(DB.close())
