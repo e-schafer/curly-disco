@@ -4,7 +4,6 @@ from hashlib import sha256
 from typing import Optional
 
 import initdb
-import watcher
 from db import DB
 from fastapi import Request
 from fastapi.responses import RedirectResponse
@@ -13,10 +12,12 @@ from nicegui.elements.input import Input
 from starlette.middleware.base import BaseHTTPMiddleware
 from views.asset import AssetView
 from views.command import CommandView
+from views.market import MarketView
 from views.orders import OrdersView, TradesView
 from views.settings import SettingsView
+from watcher import Watcher
 
-VERSION = "0.3.0"
+VERSION = "0.4.0"
 AUTHENTICATION = os.environ["AUTHENTICATION_HASH"]
 BINANCE_API_KEY = os.environ["BINANCE_API_KEY"]
 BINANCE_API_SECRET = os.environ["BINANCE_API_SECRET"]
@@ -30,7 +31,8 @@ print("DISABLE_WATCHER", DISABLE_WATCHER)
 
 UNRESTRICTED_PAGE_ROUTES = {"/login"}
 _initdb = initdb.InitDB(api_key=BINANCE_API_KEY, api_secret=BINANCE_API_SECRET)
-_watcher = watcher.Watcher(api_key=BINANCE_API_KEY, api_secret=BINANCE_API_SECRET)
+_watcher = Watcher(api_key=BINANCE_API_KEY, api_secret=BINANCE_API_SECRET)
+_market = MarketView(api_key=BINANCE_API_KEY, api_secret=BINANCE_API_SECRET)
 _commands = CommandView(api_key=BINANCE_API_KEY, api_secret=BINANCE_API_SECRET)
 _orders = OrdersView(api_key=BINANCE_API_KEY, api_secret=BINANCE_API_SECRET)
 _trades = TradesView(api_key=BINANCE_API_KEY, api_secret=BINANCE_API_SECRET)
@@ -38,6 +40,7 @@ _assets = AssetView(api_key=BINANCE_API_KEY, api_secret=BINANCE_API_SECRET)
 _settings = SettingsView()
 
 
+@app.add_middleware
 class AuthMiddleware(BaseHTTPMiddleware):
     """This middleware restricts access to all NiceGUI pages.
 
@@ -50,9 +53,6 @@ class AuthMiddleware(BaseHTTPMiddleware):
                 app.storage.user["referrer_path"] = request.url.path  # remember where the user wanted to go
                 return RedirectResponse("/login")
         return await call_next(request)
-
-
-app.add_middleware(AuthMiddleware)
 
 
 @app.on_startup
@@ -86,7 +86,7 @@ async def shutdown():
     await DB.close()
 
 
-@ui.page("/", title="Curly Disco", response_timeout=20.0)
+@ui.page("/", title="Robot", response_timeout=20.0)
 async def index():
     def logout() -> None:
         app.storage.user.clear()
@@ -95,13 +95,22 @@ async def index():
     with ui.header().classes(replace="row items-center"):
         with ui.tabs() as tabs:
             ui.tab("Home")
+            ui.tab("Assets")
             ui.tab("Orders")
             ui.tab("Settings")
         with ui.row().classes("items-center absolute-right"):
             ui.label(f"pomato {VERSION}")
             ui.button(on_click=logout, icon="logout").props("outline round")
-    with ui.tab_panels(tabs, value="Home"):
+    with ui.tab_panels(tabs, value="Home", keep_alive=False):
         with ui.tab_panel("Home"):
+            ui.markdown(
+                """
+                # Welcome to Curly Disco
+                This is a simple trading bot that uses the Binance API to trade.
+                """
+            )
+            await _market.render()
+        with ui.tab_panel("Assets"):
             await _assets.render()
             await _trades.render()
         with ui.tab_panel("Orders"):
@@ -111,7 +120,7 @@ async def index():
             await _settings.render()
 
 
-@ui.page("/login")
+@ui.page("/login", title="Login")
 def login() -> Optional[RedirectResponse]:
     def try_login() -> None:  # local function to avoid passing username and password as arguments
         if AUTHENTICATION == sha256(f"{username.value}:{password.value}".encode("utf-8")).hexdigest():
@@ -129,5 +138,5 @@ def login() -> Optional[RedirectResponse]:
     return None
 
 
-ui.dark_mode(value=True)
+ui.dark_mode().enable()
 ui.run(reload=False, storage_secret="THIS_NEEDS_TO_BE_CHANGED")
