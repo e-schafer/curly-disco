@@ -1,6 +1,5 @@
 import os
 from datetime import datetime
-from pprint import pp
 
 import plotly.graph_objects as go
 import requests
