@@ -1,7 +1,9 @@
+import time
 from typing import Any, Dict, List
 
 import models
 from cex import ExchangeInterface
+from initdb import InitDB
 from nicegui import ui
 from views.slots import Slots
 
@@ -78,13 +80,22 @@ class OrdersView(ExchangeInterface):
         with ui.row():
             ui.button("Refresh", on_click=self.panel_open_orders.refresh)
             ui.button("Delete selected orders", on_click=self.__remove_selected_orders, color="red")
-
         await self.panel_open_orders()
 
 
 class TradesView(ExchangeInterface):
     def __init__(self, api_key, api_secret):
         super().__init__(api_key, api_secret)
+
+    async def __synchronise_all_trades(self):
+        notif = ui.notification(timeout=None)
+        initDB = InitDB(spot=self.client)
+        notif.message = "Synchronizing trades..."
+        notif.spinner = True
+        await initDB.init_orders_and_trades()
+        notif.spinner = False
+        notif.message = "Synchronization done."
+        notif.dismiss()
 
     @ui.refreshable
     async def panel_trades(self) -> None:
@@ -98,5 +109,7 @@ class TradesView(ExchangeInterface):
         return None
 
     async def render(self):
-        ui.button("Refresh", on_click=self.panel_trades.refresh)
+        with ui.row():
+            ui.button("Refresh", on_click=self.panel_trades.refresh)
+            ui.button("Synchronize", color="green", on_click=self.__synchronise_all_trades)
         await self.panel_trades()
