@@ -118,7 +118,7 @@ class AssetView(ExchangeInterface):
     async def render(self):
         with ui.row(align_items="stretch"):
             ui.button("Refresh", on_click=self.asset_view.refresh)
-            ui.button("Synchronisation", on_click=self.init_assets, color="green")
+            ui.button("Synchronize", on_click=self.init_assets, color="green")
             ui.button("Sell market", on_click=lambda: self.__sell_selected_assets(type="MARKET"), color="red")
             ui.button("Sell break even", on_click=lambda: self.__sell_selected_assets(type="LIMIT"), color="red")
         await self.asset_view()
