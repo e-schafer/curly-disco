@@ -1,17 +1,15 @@
 import os
 from datetime import datetime
 from pprint import pp
+from typing import Optional
 
 import models
 from binance.spot import Spot
 
 
 class InitDB:
-    def __init__(self, api_key, api_secret):
-        self.client = Spot(
-            api_key,
-            api_secret,
-        )
+    def __init__(self, api_key=None, api_secret=None, spot: Optional[Spot] = None):
+        self.client = spot if spot else Spot(api_key, api_secret)
 
     async def init_orders_and_trades(self, selected_pairs: list[str] = []):
         await models.Orders.all().delete()
@@ -50,12 +48,12 @@ class InitDB:
             print(f"Orders found {len(data)} for {pair}") if data else None
             await models.Orders.bulk_create(data, on_conflict=["id"], ignore_conflicts=True)
             await models.Trades.bulk_create(
-                objects=await self.__init_trades_history(data),
+                objects=await self.__init_token_trades(data),
                 on_conflict=["pair", "opened_at", "closed_at"],
                 ignore_conflicts=True,
             )
 
-    async def __init_trades_history(self, orders: list[models.Orders]) -> list[models.Trades]:
+    async def __init_token_trades(self, orders: list[models.Orders]) -> list[models.Trades]:
         """_summary_
 
         Args:
