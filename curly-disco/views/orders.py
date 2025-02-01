@@ -1,4 +1,3 @@
-import time
 from typing import Any, Dict, List
 
 import models
@@ -10,14 +9,14 @@ from views.slots import Slots
 
 class OrdersView(ExchangeInterface):
     ORDERS_SCHEMA = [
-        {"name": "ID", "label": "id", "field": "id", "sortable": True},
-        {"name": "Pair", "label": "pair", "field": "pair", "sortable": True},
-        {"name": "Side", "label": "side", "field": "side", "sortable": True},
-        {"name": "Type", "label": "type", "field": "type", "sortable": True},
-        {"name": "Quantity", "label": "quantity", "field": "quantity", "sortable": True},
-        {"name": "Current price", "label": "current", "field": "current_price", "sortable": True},
-        {"name": "Target price", "label": "target", "field": "target_price", "sortable": True},
-        {"name": "Far", "label": "far", "field": "far", "sortable": True},
+        {"name": "id", "label": "ID", "field": "id", "sortable": True},
+        {"name": "pair", "label": "Pair", "field": "pair", "sortable": True},
+        {"name": "side", "label": "Side", "field": "side", "sortable": True},
+        {"name": "type", "label": "Type", "field": "type", "sortable": True},
+        {"name": "quantity", "label": "Quantity", "field": "quantity", "sortable": True},
+        {"name": "current_price", "label": "Current Price", "field": "current_price", "sortable": True},
+        {"name": "target_price", "label": "Target Price", "field": "target_price", "sortable": True},
+        {"name": "far", "label": "Far", "field": "far", "sortable": True},
     ]
 
     def __init__(self, api_key, api_secret):
@@ -44,7 +43,7 @@ class OrdersView(ExchangeInterface):
                         "quantity": order["origQty"],
                         "target_price": format(target_price, "g"),
                         "current_price": current_price,
-                        "far": format(round(far, 2), "g"),
+                        "far": round(far, 2),
                     }
                 )
 
@@ -61,10 +60,14 @@ class OrdersView(ExchangeInterface):
             selection="multiple",
         )
         self.orders_table.add_slot("body-cell-far", Slots.slot_red_green("far", "%"))
-        # self.orders_table.add_slot(
-        #     "body-cell-side",
-        #     Slots.slot_red_green("side", ".", condition="""props.value === "BUY" ? "green" : "red" """),
-        # )
+        self.orders_table.add_slot(
+            "body-cell-side",
+            """<q-td key="side" :props="props">
+                <q-badge :color="props.value === 'SELL' ? 'red' : 'green'">
+                {{ props.value }}
+                </q-badge>
+                </q-td>""",
+        )
 
     def __remove_selected_orders(self):
         selected_orders = self.orders_table.selected
