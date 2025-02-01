@@ -98,6 +98,11 @@ class InitDB:
                 opened_at = datetime(1970, 1, 1)
         return trades
 
+    async def check_market_table(self):
+        nbr = await models.Assets.all().count()
+        if nbr == 0:
+            await self.init_market()
+
     async def init_market(self):
         """_summary_"""
 
@@ -111,7 +116,24 @@ class InitDB:
                 "tick_quantity": float(filterQuantity["stepSize"]),
             }
 
+        def is_history_long_enough(pair: str):
+            klines = self.client.klines(symbol=pair, interval="1M", limit="7")
+            return True if len(klines) >= 6 else False
+
         await models.Market.all().delete()
+        data = list(
+            filter(
+                lambda x: x["quoteAsset"] == "USDT"
+                and x["baseAsset"] not in ("USDT", "TUSD", "USDC", "USDP")
+                and x["allowTrailingStop"]
+                and x["isSpotTradingAllowed"]
+                and x["status"] == "TRADING",
+                self.client.exchange_info(permissions=["SPOT"]).get("symbols"),
+            )
+        )
+        print(f"Market -- {len(data)} pairs available")
+        data = list(filter(lambda z: is_history_long_enough(z["symbol"]), data))
+        print(f"Market -- {len(data)} pairs accepted")
         data = list(
             map(
                 lambda y: models.Market(
@@ -120,17 +142,9 @@ class InitDB:
                     quote_symbol=y["quoteAsset"],
                     **extract_filters(y["filters"]),
                 ),
-                filter(
-                    lambda x: x["quoteAsset"] == "USDT"
-                    and x["baseAsset"] not in ("USDT", "TUSD", "USDC", "USDP")
-                    and x["allowTrailingStop"]
-                    and x["isSpotTradingAllowed"]
-                    and x["status"] == "TRADING",
-                    self.client.exchange_info(permissions=["SPOT"]).get("symbols"),
-                ),
+                data,
             )
         )
-        print(f"Market found {len(data)} pairs")
         await models.Market.bulk_create(data, on_conflict=["symbol"], ignore_conflicts=True)
 
     async def init_assets(self):
