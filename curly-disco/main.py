@@ -59,7 +59,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
 async def startup():
     await DB.init()
     await _initdb.init_settings()
-    await _initdb.init_market()
+    await _initdb.check_market_table()
     await _initdb.init_assets()
     if not SKIP_INIT_HISTORIC:
         await _initdb.init_orders_and_trades()
