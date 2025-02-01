@@ -31,12 +31,12 @@ class CommandView(ExchangeInterface):
 
     def __cancel_all_buy(self):
         orders = self.client.get_open_orders()
+        orders = list(filter(lambda x: x["side"] == "BUY", orders))
         for order in orders:
-            if order["side"] == "BUY":
-                try:
-                    self.client.cancel_order(symbol=order["symbol"], orderId=order["orderId"])
-                except ClientError as e:
-                    ui.notify(f"Error cancelling order: {e}", level="warning", color="red")
+            try:
+                self.client.cancel_order(symbol=order["symbol"], orderId=order["orderId"])
+            except ClientError as e:
+                ui.notify(f"Error cancelling order: {e}", level="warning", color="red")
         ui.notify(f"{len(orders)} orders cancelled", level="warning")
 
     def __put_order(self, symbol: str, side: str, type: str, quantity: float, price: float):
@@ -68,7 +68,10 @@ class CommandView(ExchangeInterface):
         # add market buy order select from model.Markets
         with ui.row():
             select_pair = ui.select(
-                label="Pair", options=await models.Market.all().values_list("pair", flat=True), with_input=True
+                label="Pair",
+                options=await models.Market.all().values_list("pair", flat=True),
+                with_input=True,
+                new_value_mode="add-unique",
             )
             select_side = ui.select(label="Side", options=["BUY", "SELL"], with_input=True)
             select_type = ui.select(label="Type", options=["MARKET", "LIMIT"], with_input=True)
