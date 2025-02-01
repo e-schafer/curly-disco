@@ -115,8 +115,17 @@ class MarketView(ExchangeInterface):
                 else:
                     ui.label(f"↓ {round(btc_variation,2)}%").classes("text-negative")
 
+    async def __render_next_delist(self):
+        data = self.client.delist_schedule_symbols()
+        ui.label("Next delist")
+        for delist in data:
+            date = datetime.fromtimestamp(delist["delistTime"] / 1000)
+            ui.label(f"{date.date()} -- {delist['symbols']}")
+
     async def render(self):
         coinmarketcap_data = await self.__get_market_data()
+        with ui.card().props("flat bordered"):
+            await self.__render_next_delist()
 
         with ui.row():
             await self.__render_bitcoin_dominance(coinmarketcap_data)
