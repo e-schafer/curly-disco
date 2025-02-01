@@ -1,4 +1,5 @@
 import asyncio
+import json
 import os
 from datetime import datetime
 from itertools import chain
@@ -24,18 +25,20 @@ class Watcher:
     def stop_watch(self):
         self.ws_client.stop()
 
-    async def on_message(self, _, msg):
+    def on_message(self, _, msg: dict):
         print(f"on_message: {msg}")
         print(f"on_message _: {_}")
-        match msg["e"]:
+        event = json.loads(msg)
+        match event.get("e", ""):
             case "executionReport":
-                await self.handle_execution_report(msg)
+                asyncio.run(self.handle_execution_report(event))
             case "outboundAccountInfo":
                 print(msg)
             case _:
                 pass
+        return True
 
-    async def handle_execution_report(self, msg):
+    async def handle_execution_report(self, msg: dict):
         pair = msg["s"]
         token_qty = float(msg["q"])
         quote_qty = float(msg["p"])
@@ -97,6 +100,7 @@ class Watcher:
             pass
         else:
             pass
+        return True
 
     async def mitrailles(self, pair: str, start_price: float):
         mitraille_range = float((await models.Settings.get(key=models.Settings.Keys.MITRAILLE_PERCENTAGE)).value) / 100
@@ -313,6 +317,6 @@ if __name__ == "__main__":
     data = asyncio.run(watcher.strat_compute_entry())
     with open("data.json", "w") as f:
         for d in data:
-            f.write(str(d))
+            f.write(str(d) + "\n")
     watcher.ws_client.stop()
     asyncio.run(DB.close())
