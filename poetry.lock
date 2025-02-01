@@ -226,13 +226,13 @@ files = [
 
 [[package]]
 name = "binance-connector"
-version = "3.11.0"
+version = "3.12.0"
 description = "This is a lightweight library that works as a connector to Binance public API."
 optional = false
 python-versions = ">=3.8"
 files = [
-    {file = "binance-connector-3.11.0.tar.gz", hash = "sha256:d0db34c5d9883584afe336a18c261fc91bfbbf6f06cc1db90e8376ea1e902608"},
-    {file = "binance_connector-3.11.0-py3-none-any.whl", hash = "sha256:79f5434294a1d4b5b22c5aa33366fe61c5d673c4b92a86eb1a5cdcdd8046ad39"},
+    {file = "binance-connector-3.12.0.tar.gz", hash = "sha256:33bf03052e2f1be3ced1196a36c51a736a50aaae07f7922640c7ebc017c6011f"},
+    {file = "binance_connector-3.12.0-py3-none-any.whl", hash = "sha256:b6706426acd2089f6cd3cb1516a8c47210805eac1f855bc8574b01f52cab218b"},
 ]
 
 [package.dependencies]
@@ -1044,13 +1044,13 @@ files = [
 
 [[package]]
 name = "nicegui"
-version = "2.9.1"
+version = "2.10.1"
 description = "Create web-based user interfaces with Python. The nice way."
 optional = false
 python-versions = "<4.0,>=3.8"
 files = [
-    {file = "nicegui-2.9.1-py3-none-any.whl", hash = "sha256:5456f1de34c7d3b62d9349879855b99c6623ea67e4c0b5ff0635010ad3b57d22"},
-    {file = "nicegui-2.9.1.tar.gz", hash = "sha256:1cb944340353fefb6db0c6a27d10b43792fd400d3dbc748426efcef59192c250"},
+    {file = "nicegui-2.10.1-py3-none-any.whl", hash = "sha256:d1cb72691a2ce178cd91cdef5e175f9efa2e9dc7a48235c673bebd16b89f920c"},
+    {file = "nicegui-2.10.1.tar.gz", hash = "sha256:94f95dd0d57c1ef25e5a3a6333a76dd40fc0d68d43f9491b8402ed026115edfe"},
 ]
 
 [package.dependencies]
@@ -1080,6 +1080,7 @@ highcharts = ["nicegui-highcharts (>=2.0.2,<3.0.0)"]
 matplotlib = ["matplotlib (>=3.5.0,<4.0.0)"]
 native = ["pywebview (>=5.0.1,<6.0.0)"]
 plotly = ["plotly (>=5.13.0,<6.0.0)"]
+redis = ["redis (>=4.0.0)"]
 sass = ["libsass (>=0.23.0,<0.24.0)"]
 
 [[package]]
@@ -2419,4 +2420,4 @@ propcache = ">=0.2.0"
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.12,<3.14"
-content-hash = "d0dadcb4a5cac8271d57d9a7a8dd87d2f50cac290123f685827a7d3cd51c90a1"
+content-hash = "c08d03b8a53c692a11158517eb0dab21ea728a565d6c3d5c5f1697abfc3f8bc1"
