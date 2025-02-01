@@ -106,7 +106,10 @@ class AssetView(ExchangeInterface):
                 "quantity": asset["token_quantity"],
             }
             if type == "LIMIT":
-                payload["price"] = asset["buy_unit_price"]
+                asset_config = await models.Market().get(pair=asset["id"])
+                payload["price"] = format(
+                    (asset["buy_unit_price"] // float(asset_config.tick_price)) * float(asset_config.tick_price), "g"
+                )
                 payload["timeInForce"] = "GTC"
             try:
                 self.client.new_order(**payload)
