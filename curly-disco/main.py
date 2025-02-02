@@ -32,7 +32,7 @@ print("DISABLE_WATCHER", DISABLE_WATCHER)
 UNRESTRICTED_PAGE_ROUTES = {"/login"}
 _initdb = initdb.InitDB(api_key=BINANCE_API_KEY, api_secret=BINANCE_API_SECRET)
 _watcher = Watcher(api_key=BINANCE_API_KEY, api_secret=BINANCE_API_SECRET)
-_market = MarketView(api_key=BINANCE_API_KEY, api_secret=BINANCE_API_SECRET)
+# _market = MarketView(api_key=BINANCE_API_KEY, api_secret=BINANCE_API_SECRET)
 _commands = CommandView(api_key=BINANCE_API_KEY, api_secret=BINANCE_API_SECRET)
 _orders = OrdersView(api_key=BINANCE_API_KEY, api_secret=BINANCE_API_SECRET)
 _trades = TradesView(api_key=BINANCE_API_KEY, api_secret=BINANCE_API_SECRET)
@@ -97,14 +97,14 @@ async def index():
 
     with ui.header().classes(replace="row items-center"):
         with ui.tabs() as tabs:
-            ui.tab("Home")
+            # ui.tab("Home")
             ui.tab("Assets")
             ui.tab("Orders")
             ui.tab("Settings")
         with ui.row().classes("items-center absolute-right"):
             ui.label(f"pomato {VERSION}")
             ui.button(on_click=logout, icon="logout").props("outline round")
-    with ui.tab_panels(tabs, value="Home", keep_alive=False):
+    with ui.tab_panels(tabs, value="Assets", keep_alive=False):
         with ui.tab_panel("Home"):
             ui.markdown(
                 """
@@ -112,7 +112,7 @@ async def index():
                 This is a simple trading bot that uses the Binance API to trade.
                 """
             )
-            await _market.render()
+            # await _market.render()
         with ui.tab_panel("Assets"):
             await _assets.render()
             await _trades.render()
