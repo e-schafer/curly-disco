@@ -75,7 +75,7 @@ class Watcher:
                     market_value=token_qty * quote_qty,
                     opened_at=datetime.fromtimestamp(msg["T"] / 1000),
                 )
-                # await self.mitrailles(pair, base_unit_price)
+                await self.mitrailles(pair, base_unit_price)
 
         elif msg["S"] == "SELL":
             if asset:
