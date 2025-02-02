@@ -83,7 +83,10 @@ async def error(error: Exception):
 
 @app.on_shutdown
 async def shutdown():
+    _watcher.stop_watch()
+    app.storage.user.clear()
     await DB.close()
+    print("Robot stopped")
 
 
 @ui.page("/", title="Robot", response_timeout=20.0)
