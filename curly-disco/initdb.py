@@ -120,7 +120,6 @@ class InitDB:
             klines = self.client.klines(symbol=pair, interval="1M", limit="7")
             return True if len(klines) >= 6 else False
 
-        await models.Market.all().delete()
         data = list(
             filter(
                 lambda x: x["quoteAsset"] == "USDT"
@@ -145,6 +144,7 @@ class InitDB:
                 data,
             )
         )
+        await models.Market.all().delete()
         await models.Market.bulk_create(data, on_conflict=["symbol"], ignore_conflicts=True)
 
     async def init_assets(self):
