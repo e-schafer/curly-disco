@@ -4,6 +4,7 @@ import os
 from datetime import datetime
 from itertools import chain
 from statistics import mean
+from typing import Optional
 
 import models
 from binance.error import ClientError
@@ -14,8 +15,8 @@ from fastapi_utilities import repeat_at
 
 
 class Watcher:
-    def __init__(self, api_key, api_secret):
-        self.client: Spot = Spot(api_key, api_secret)
+    def __init__(self, api_key=None, api_secret=None, spot: Optional[Spot] = None):
+        self.client = spot if spot else Spot(api_key, api_secret)
         self.ws_client = SpotWebsocketStreamClient(on_message=self.on_message)
 
     def start_watch(self):

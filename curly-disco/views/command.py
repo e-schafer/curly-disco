@@ -1,7 +1,12 @@
+import asyncio
+
 import models
+import watcher
 from binance.error import ClientError
 from cex import ExchangeInterface
+from initdb import InitDB
 from nicegui import ui
+from watcher import Watcher
 
 
 class CommandView(ExchangeInterface):
@@ -10,7 +15,7 @@ class CommandView(ExchangeInterface):
     def __init__(self, api_key, api_secret):
         super().__init__(api_key, api_secret)
 
-    async def __confirm_cancel(self, message="Are you sure?", funct=None):
+    async def __confirm_action(self, funct, message="Are you sure?"):
         with ui.dialog() as dialog, ui.card():
             ui.label(message)
             with ui.row(align_items="center"):
@@ -64,6 +69,24 @@ class CommandView(ExchangeInterface):
         except ValueError:
             return False
 
+    async def __sync_market(self):
+        notif = ui.notification(timeout=None)
+        notif.message = "Synchronizing market..."
+        notif.spinner = True
+        await InitDB(spot=self.client).init_market()
+        notif.spinner = False
+        notif.message = "Synchronization done."
+        notif.dismiss()
+
+    async def __sync_buy_strategy(self):
+        notif = ui.notification(timeout=None)
+        notif.message = "Synchronizing market..."
+        notif.spinner = True
+        await Watcher(spot=self.client).strat_loop_compute_entry()
+        notif.spinner = False
+        notif.message = "Synchronization done."
+        notif.dismiss()
+
     async def render(self):
         # add market buy order select from model.Markets
         with ui.row():
@@ -97,11 +120,10 @@ class CommandView(ExchangeInterface):
         # cancel all orders
         with ui.row():
             ui.button("Cancel all orders", color="red").on_click(
-                lambda: self.__confirm_cancel("Cancel all orders.\nAre you sure?", self.__cancel_all_orders)
+                lambda: self.__confirm_action(self.__cancel_all_orders, "Cancel all orders.\nAre you sure?")
             )
             ui.button("Cancel all buy orders", color="red").on_click(
-                lambda: self.__confirm_cancel("Cancel all buy orders.\nAre you sure?", self.__cancel_all_buy)
+                lambda: self.__confirm_action(self.__cancel_all_buy, "Cancel all buy orders.\nAre you sure?")
             )
-            # ui.button("Resync assets", on_click=lambda: manual_update_assets())
-            # # ui.button("Resync trades", on_click=lambda: manual_update_trades())
-            # ui.button("Resync market", on_click=lambda: manual_update_market())
+            ui.button("Sync tradable pairs", color="green").on_click(self.__sync_market)
+            ui.button("Restart buy strategy", color="gold").on_click(self.__sync_buy_strategy)
