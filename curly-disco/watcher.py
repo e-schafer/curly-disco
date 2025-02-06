@@ -28,7 +28,6 @@ class Watcher:
 
     def on_message(self, _, msg: dict):
         print(f"on_message: {msg}")
-        print(f"on_message _: {_}")
         event = json.loads(msg)
         match event.get("e", ""):
             case "executionReport":
@@ -46,7 +45,7 @@ class Watcher:
         base_unit_price = float(msg["p"])
         if msg["X"] != "FILLED":
             return
-        asset = await models.Assets().get(id=pair)
+        asset = await models.Assets().get_or_none(id=pair)
         print(f"Order: {msg['i']} {msg['S']} {pair} {token_qty} {quote_qty} {base_unit_price}")
         await models.Orders.create(
             id=msg["i"],
