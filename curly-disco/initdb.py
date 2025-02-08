@@ -148,27 +148,25 @@ class InitDB:
         await models.Market.bulk_create(data, on_conflict=["symbol"], ignore_conflicts=True)
 
     async def init_assets(self):
-        await models.Assets.all().delete()
-        pairs = list(
-            map(
-                lambda y: f"{y['asset']}USDT",
-                filter(
-                    lambda x: x["asset"] not in ("USDT", "BNB"),
-                    self.client.account(omitZeroBalances="true").get("balances"),
-                ),
-            )
-        )
-        pp(pairs)
-        for pair in pairs:
+        async def compute_asset(pair: str):
             print(f"Fetching open trades for {pair}")
-            orders = list(filter(lambda x: x["status"] == "FILLED", self.client.get_orders(symbol=pair)))
+            data = self.client.get_orders(symbol=pair)
+            orders = list(filter(lambda x: x["status"] == "FILLED", data))
             orders.sort(key=lambda x: x["time"], reverse=True)
             token_quantity: float = 0.0
             quote_quantity: float = 0.0
             opened_at: datetime = datetime(1970, 1, 1)
-            for order in orders:
+            for index, order in enumerate(orders):
                 if order["side"] == "SELL":
-                    break
+                    # in this case we have asset but the last order is SELL
+                    # which means we have dust to collect
+                    if index == 0:
+                        resp = self.client.transfer_dust([pair.replace("USDT", "")])
+                        print(resp.get("transferResult", ""))
+                        return
+                    # we reach last sell operation and we can guess we have all BUY orders
+                    else:
+                        break
                 token_quantity += float(order.get("origQty", 0))
                 quote_quantity += float(order.get("cummulativeQuoteQty", 0))
                 opened_at = datetime.fromtimestamp(order["time"] / 1000)
@@ -187,6 +185,20 @@ class InitDB:
                 opened_at=opened_at,
             )
 
+        await models.Assets.all().delete()
+        pairs = list(
+            map(
+                lambda y: f"{y['asset']}USDT",
+                filter(
+                    lambda x: x["asset"] not in ("USDT", "BNB"),
+                    self.client.account(omitZeroBalances="true").get("balances"),
+                ),
+            )
+        )
+        pp(pairs)
+        for pair in pairs:
+            await compute_asset(pair)
+
     async def init_settings(self):
         settings = [
             models.Settings(key=models.Settings.Keys.SELL_GAINS_PERCENTAGE, value=20),
@@ -200,9 +212,9 @@ class InitDB:
         await models.Settings.bulk_create(settings, on_conflict=["key"], ignore_conflicts=True)
 
     async def first_run(self):
-        await self.init_settings()
-        await self.init_market()
-        await self.init_orders_and_trades()
+        # await self.init_settings()
+        # await self.init_market()
+        # await self.init_orders_and_trades()
         await self.init_assets()
 
 

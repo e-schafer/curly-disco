@@ -59,7 +59,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
 async def startup():
     await DB.init()
     await _initdb.init_settings()
-    await _initdb.init_market()
+    # await _initdb.init_market()
     await _initdb.init_assets()
     if not SKIP_INIT_HISTORIC:
         await _initdb.init_orders_and_trades()
@@ -74,11 +74,12 @@ async def startup():
 
 @app.on_exception
 async def error(error: Exception):
-    ui.notify(
-        "Website Exception: \n" f"{traceback.format_exception(error)} \n",
-        multi_line=True,
-        classes="multi-line-notification",
-    )
+    pass
+    # ui.notify(
+    #     "Website Exception: \n" f"{traceback.format_exception(error)} \n",
+    #     multi_line=True,
+    #     classes="multi-line-notification",
+    # )
 
 
 @app.on_shutdown

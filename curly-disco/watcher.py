@@ -27,7 +27,6 @@ class Watcher:
         self.ws_client.stop()
 
     def on_message(self, _, msg: dict):
-        print(f"on_message: {msg}")
         event = json.loads(msg)
         match event.get("e", ""):
             case "executionReport":
@@ -41,10 +40,11 @@ class Watcher:
     async def handle_execution_report(self, msg: dict):
         pair = msg["s"]
         token_qty = float(msg["q"])
-        quote_qty = float(msg["p"])
-        base_unit_price = float(msg["p"])
+        quote_qty = float(msg["Z"])
+        base_unit_price = float(msg["L"])
         if msg["X"] != "FILLED":
             return
+        print(f"on_message: {msg}")
         asset = await models.Assets().get_or_none(id=pair)
         print(f"Order: {msg['i']} {msg['S']} {pair} {token_qty} {quote_qty} {base_unit_price}")
         await models.Orders.create(
@@ -52,8 +52,8 @@ class Watcher:
             pair=pair,
             side=msg["S"],
             base_unit_price=base_unit_price,
-            token_quantity=msg["q"],
-            quote_quantity=msg["p"] * msg["q"],
+            token_quantity=float(msg["q"]),
+            quote_quantity=float(msg["p"]) * float(msg["q"]),
             timestamp=datetime.fromtimestamp(msg["T"] / 1000),
         )
 
@@ -89,13 +89,17 @@ class Watcher:
                         }
                     )
                 await models.Trades.create(
+                    id=msg["i"],
                     pair=pair,
-                    token_quantity=token_qty,
-                    quote_quantity=quote_qty,
-                    gains=quote_qty - float(asset.quote_quantity),
-                    gains_percentage=((quote_qty - float(asset.quote_quantity)) / float(asset.quote_quantity)) * 100,
                     opened_at=asset.opened_at,
                     closed_at=datetime.fromtimestamp(msg["T"] / 1000),
+                    token_quantity=token_qty,
+                    buy_unit_price=asset.buy_unit_price,
+                    buy_quote_quantity=asset.quote_quantity,
+                    sell_unit_price=base_unit_price,
+                    sell_quote_quantity=quote_qty,
+                    gains=quote_qty - float(asset.quote_quantity),
+                    gains_percentage=((quote_qty - float(asset.quote_quantity)) / float(asset.quote_quantity)) * 100,
                 )
             pass
         else:

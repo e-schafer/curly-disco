@@ -96,8 +96,8 @@ class TradesView(ExchangeInterface):
         notif.message = "Synchronizing trades..."
         notif.spinner = True
         await initDB.init_orders_and_trades()
-        notif.spinner = False
         notif.message = "Synchronization done."
+        notif.spinner = False
         notif.dismiss()
 
     @ui.refreshable
