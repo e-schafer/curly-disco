@@ -26,7 +26,7 @@ class Watcher:
     def stop_watch(self):
         self.ws_client.stop()
 
-    def on_message(self, _, msg: dict):
+    def on_message(self, _, msg: str):
         event = json.loads(msg)
         match event.get("e", ""):
             case "executionReport":

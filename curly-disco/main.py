@@ -1,5 +1,4 @@
 import os
-import traceback
 from hashlib import sha256
 from typing import Optional
 
