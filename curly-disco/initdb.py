@@ -5,6 +5,7 @@ from typing import Optional
 
 import models
 from binance.spot import Spot
+from utils.logger import log_api
 
 
 class InitDB:
@@ -45,7 +46,8 @@ class InitDB:
                     list(filter(lambda x: x["status"] == "FILLED", self.client.get_orders(symbol=pair))),
                 )
             )
-            print(f"Orders found {len(data)} for {pair}") if data else None
+            if data:
+                log_api("info", f"Found {len(data)} orders for {pair}", endpoint="get_orders")
             await models.Orders.bulk_create(data, on_conflict=["id"], ignore_conflicts=True)
             await models.Trades.bulk_create(
                 objects=await self.__init_token_trades(data),
@@ -130,9 +132,9 @@ class InitDB:
                 self.client.exchange_info(permissions=["SPOT"]).get("symbols"),
             )
         )
-        print(f"Market -- {len(data)} pairs available")
+        log_api("info", f"Market info: {len(data)} pairs available", endpoint="exchange_info")
         data = list(filter(lambda z: is_history_long_enough(z["symbol"]), data))
-        print(f"Market -- {len(data)} pairs accepted")
+        log_api("info", f"Market filter: {len(data)} pairs accepted after history check", endpoint="ui_klines")
         data = list(
             map(
                 lambda y: models.Market(
@@ -149,7 +151,7 @@ class InitDB:
 
     async def init_assets(self):
         async def compute_asset(pair: str):
-            print(f"Fetching open trades for {pair}")
+            log_api("debug", f"Fetching trades for asset {pair}", endpoint="get_orders")
             data = self.client.get_orders(symbol=pair)
             orders = list(filter(lambda x: x["status"] == "FILLED", data))
             orders.sort(key=lambda x: x["time"], reverse=True)
@@ -162,7 +164,7 @@ class InitDB:
                     # which means we have dust to collect
                     if index == 0:
                         resp = self.client.transfer_dust([pair.replace("USDT", "")])
-                        print(resp.get("transferResult", ""))
+                        log_api("info", f"Dust transfer result: {resp.get('transferResult', '')}", endpoint="transfer_dust")
                         return
                     # we reach last sell operation and we can guess we have all BUY orders
                     else:

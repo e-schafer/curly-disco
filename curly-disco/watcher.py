@@ -12,6 +12,7 @@ from binance.spot import Spot
 from binance.websocket.spot.websocket_stream import SpotWebsocketStreamClient
 from db import DB
 from fastapi_utilities import repeat_at
+from utils.logger import log_websocket, log_order, log_strategy, log_api
 
 
 class Watcher:
@@ -32,7 +33,7 @@ class Watcher:
             case "executionReport":
                 asyncio.run(self.handle_execution_report(event))
             case "outboundAccountInfo":
-                print(msg)
+                log_websocket("info", f"Account info update: {msg}")
             case _:
                 pass
         return True
@@ -44,9 +45,10 @@ class Watcher:
         base_unit_price = float(msg["L"])
         if msg["X"] != "FILLED":
             return
-        print(f"on_message: {msg}")
+        log_websocket("info", f"Execution report received: {msg}")
         asset = await models.Assets().get_or_none(id=pair)
-        print(f"Order: {msg['i']} {msg['S']} {pair} {token_qty} {quote_qty} {base_unit_price}")
+        log_order("info", f"Order executed: {msg['S']} {pair} qty={token_qty} price={base_unit_price}", 
+                  pair=pair, amount=token_qty)
         await models.Orders.create(
             id=msg["i"],
             pair=pair,
@@ -132,15 +134,15 @@ class Watcher:
 
             except ClientError as e:
                 if e.error_code == -2010 and "insufficient balance" in e.error_message:
-                    print("Insufficient balance")
+                    log_order("warning", "Insufficient balance for mitrailles order", pair=pair)
                     break
                 else:
-                    print(f"Order Refused: {pair} code={e.error_code}, message={e.error_message}")
+                    log_api("error", f"Order refused: {e.error_message}", endpoint="new_order")
 
     async def get_lessper(self):
         lessper = float((await models.Settings.get(key=models.Settings.Keys.LESSPER_DEFAULT)).value)
         bitcoin_variation = float(self.client.ticker_24hr(symbol="BTCUSDT")["priceChangePercent"])
-        print(f"Bitcoin variation: {bitcoin_variation}")
+        log_strategy("info", f"Bitcoin variation: {bitcoin_variation}%")
         if bitcoin_variation >= -2.5:
             lessper += 2.5
         elif bitcoin_variation >= -4.5:
@@ -157,7 +159,7 @@ class Watcher:
             lessper += 30
         else:
             lessper += 35
-        print(f"Lessper: {lessper}")
+        log_strategy("info", f"Computed lessper: {lessper}%")
         return lessper / 100
 
     async def cancel_buy_orders(self):
@@ -168,7 +170,7 @@ class Watcher:
                 self.client.cancel_open_orders(symbol=order["symbol"])
 
     async def strat_compute_entry(self, _pairs: list[str] = []) -> list[dict]:
-        print("Computing entries")
+        log_strategy("info", "Computing entry positions")
         threshold = float((await models.Settings.get(key=models.Settings.Keys.WEEKLY_DEVIATION_PERCENTAGE)).value) / 100
         buy_amount = float((await models.Settings.get(key=models.Settings.Keys.BUY_AMOUNT)).value)
         market = await models.Market.filter(is_black_listed=False).all()
@@ -180,7 +182,7 @@ class Watcher:
         positions = []
 
         for index, pair in enumerate(pairs):
-            print(f"Computing entry for {pair} ({index + 1}/{len(pairs)})")
+            log_strategy("debug", f"Computing entry for {pair} ({index + 1}/{len(pairs)})", pair=pair)
             ticks = self.client.ui_klines(symbol=pair, interval="1d", limit=8)
             if len(ticks) < 7:
                 continue
@@ -210,14 +212,13 @@ class Watcher:
         asyncio.run(self.strat_loop_compute_entry())
 
     async def strat_loop_compute_entry(self, pairs: list[str] = []):
-        print(f"Strat loop {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        log_strategy("info", f"Strategy loop started - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         await self.cancel_buy_orders()
         entries = await self.strat_compute_entry(pairs)
         for entry in entries:
             try:
-                print(
-                    f"TRY Order: {entry['pair']}, qty={format(round(entry["quantity"], 8), "g")}, target_price={format(round(entry["target_price"], 8), "g")}, current_price={format(round(entry["current_price"], 8), "g")}"
-                )
+                log_order("info", f"Placing BUY order: {entry['pair']} qty={entry['quantity']:.8g} @ {entry['target_price']:.8g} (current: {entry['current_price']:.8g})",
+                         pair=entry['pair'], amount=entry['quantity'])
                 self.client.new_order(
                     symbol=entry["pair"],
                     side="BUY",
@@ -229,10 +230,10 @@ class Watcher:
 
             except ClientError as e:
                 if e.error_code == -2010 and "insufficient balance" in e.error_message:
-                    print("Insufficient balance")
+                    log_order("warning", "Insufficient balance for strategy entry", pair=entry['pair'])
                     break
                 else:
-                    print(f"Order Refused: {entry['pair']} code={e.error_code}, message={e.error_message}")
+                    log_api("error", f"Order refused: {e.error_message}", endpoint="new_order")
 
     async def pairs_to_prices(self, pairs: list[str]) -> dict:
         prices = dict(
@@ -261,7 +262,7 @@ class Watcher:
         asyncio.run(self.strat_loop_compute_exit())
 
     async def strat_loop_compute_exit(self):
-        print(f"Strat loop exit {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        log_strategy("info", f"Strategy exit loop started - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         await self.update_assets_gains()
         await self.delist_exit()
         open_orders = list(filter(lambda x: x["side"] == "SELL", self.client.get_open_orders()))
@@ -271,7 +272,7 @@ class Watcher:
         sell_trailing_stop = int((await models.Settings.get(key=models.Settings.Keys.SELL_TRAILING_STOP)).value) * 100
         for asset in assets:
             sell_orders = list(filter(lambda x: x["symbol"] == asset.id, open_orders))
-            print(f"Checking exit for {asset.id} {asset.gains_percentage}")
+            log_strategy("debug", f"Checking exit for {asset.id} gains={asset.gains_percentage}%", pair=asset.id)
             if asset.gains_percentage >= sell_gains_percentage and not sell_orders:
                 try:
                     self.client.new_order(
@@ -282,9 +283,9 @@ class Watcher:
                         trailingDelta=sell_trailing_stop,
                     )
                 except ClientError as e:
-                    print(f"Order Refused: {asset.id} code={e.error_code}, message={e.error_message}")
+                    log_api("error", f"Order refused: {e.error_message}", endpoint="new_order")
                 except Exception as e:
-                    print(f"Error on placing order for {asset.id}: {e}")
+                    log_order("error", f"Error placing order for {asset.id}: {e}", pair=asset.id)
         return True
 
     async def delist_exit(self):
@@ -299,7 +300,7 @@ class Watcher:
             try:
                 self.client.cancel_open_orders(symbol=symbol)
             except ClientError as err:
-                print(f"Delist: Failed to cancel orders on {symbol}.{err.error_code} {err.error_message}")
+                log_api("error", f"Failed to cancel orders on {symbol}: {err.error_message}", endpoint="cancel_open_orders")
             if asset := await models.Assets.get_or_none(id=symbol):
                 try:
                     self.client.new_order(
@@ -308,9 +309,9 @@ class Watcher:
                         type="MARKET",
                         quantity=asset.token_quantity,
                     )
-                    print(f"Delist: emergency sell on {symbol}")
+                    log_order("warning", "Emergency sell executed for delisted asset", pair=symbol, amount=float(asset.token_quantity))
                 except ClientError as err:
-                    print(f"Delist: Failed to sell on {symbol}.{err.error_code} {err.error_message}")
+                    log_api("error", f"Failed to emergency sell {symbol}: {err.error_message}", endpoint="new_order")
 
 
 if __name__ == "__main__":

@@ -4,6 +4,7 @@ from typing import Literal
 import models
 from cex import ExchangeInterface
 from nicegui import ui
+from utils.logger import TradingLogger
 
 from .slots import Slots
 
@@ -26,7 +27,7 @@ class AssetView(ExchangeInterface):
             )
         )
         for pair in pairs:
-            print(f"Fetching open trades for {pair}")
+            TradingLogger().logger.debug(f"Fetching trades for {pair}")
             orders = list(filter(lambda x: x["status"] == "FILLED", self.client.get_orders(symbol=pair)))
             orders.sort(key=lambda x: x["time"], reverse=True)
             token_quantity: float = 0.0

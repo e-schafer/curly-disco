@@ -9,6 +9,7 @@ from fastapi.responses import RedirectResponse
 from nicegui import app, ui
 from nicegui.elements.input import Input
 from starlette.middleware.base import BaseHTTPMiddleware
+from utils.logger import TradingLogger
 from views.asset import AssetView
 from views.command import CommandView
 from views.market import MarketView
@@ -24,9 +25,13 @@ SKIP_INIT_HISTORIC = True if os.getenv("SKIP_INIT_HISTORIC", "").lower() == "tru
 SKIP_INIT_ENTRIES = True if os.getenv("SKIP_INIT_ENTRIES", "").lower() == "true" else False
 DISABLE_WATCHER = True if os.getenv("DISABLE_WATCHER", "").lower() == "true" else False
 
-print("SKIP_INIT_HISTORIC", SKIP_INIT_HISTORIC)
-print("SKIP_INIT_ENTRIE", SKIP_INIT_ENTRIES)
-print("DISABLE_WATCHER", DISABLE_WATCHER)
+# Initialiser le système de logging
+logger = TradingLogger()
+
+logger.logger.info(f"🚀 Démarrage du bot de trading v{VERSION}")
+logger.logger.info(f"SKIP_INIT_HISTORIC: {SKIP_INIT_HISTORIC}")
+logger.logger.info(f"SKIP_INIT_ENTRIES: {SKIP_INIT_ENTRIES}")
+logger.logger.info(f"DISABLE_WATCHER: {DISABLE_WATCHER}")
 
 UNRESTRICTED_PAGE_ROUTES = {"/login"}
 _initdb = initdb.InitDB(api_key=BINANCE_API_KEY, api_secret=BINANCE_API_SECRET)
@@ -86,7 +91,7 @@ async def shutdown():
     _watcher.stop_watch()
     app.storage.user.clear()
     await DB.close()
-    print("Robot stopped")
+    logger.logger.info("🛑 Robot arrêté")
 
 
 @ui.page("/", title="Robot", response_timeout=20.0)

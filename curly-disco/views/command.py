@@ -1,11 +1,11 @@
 import asyncio
 
 import models
-import watcher
 from binance.error import ClientError
 from cex import ExchangeInterface
 from initdb import InitDB
 from nicegui import ui
+from utils.logger import TradingLogger
 from watcher import Watcher
 
 
@@ -45,7 +45,8 @@ class CommandView(ExchangeInterface):
         ui.notify(f"{len(orders)} orders cancelled", level="warning")
 
     def __put_order(self, symbol: str, side: str, type: str, quantity: float, price: float):
-        print(f"put order: pair={symbol}, side={side}, type={type}, quantity={quantity}, price={price}")
+        logger = TradingLogger().logger
+        logger.info(f"Placing order: {side} {symbol} qty={quantity} @ {price} type={type}")
         try:
             order = {
                 "symbol": symbol,
@@ -59,7 +60,7 @@ class CommandView(ExchangeInterface):
             response = self.client.new_order(**order)
             ui.notify(f"Order placed for {response['symbol']}", level="info", color="green")
         except Exception as e:
-            print(f"Error putting order: {e}")
+            logger.error(f"Error placing order: {e}")
             ui.notify(f"Error putting order: {e}", level="error", color="red")
 
     def __validate_number(self, quantity):
