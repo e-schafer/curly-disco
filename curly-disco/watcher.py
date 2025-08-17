@@ -12,7 +12,7 @@ from binance.spot import Spot
 from binance.websocket.spot.websocket_stream import SpotWebsocketStreamClient
 from db import DB
 from fastapi_utilities import repeat_at
-from utils.logger import log_websocket, log_order, log_strategy, log_api
+from utils.logger import log_api, log_order, log_strategy, log_websocket
 
 
 class Watcher:
@@ -47,8 +47,12 @@ class Watcher:
             return
         log_websocket("info", f"Execution report received: {msg}")
         asset = await models.Assets().get_or_none(id=pair)
-        log_order("info", f"Order executed: {msg['S']} {pair} qty={token_qty} price={base_unit_price}", 
-                  pair=pair, amount=token_qty)
+        log_order(
+            "info",
+            f"Order executed: {msg['S']} {pair} qty={token_qty} price={base_unit_price}",
+            pair=pair,
+            amount=token_qty,
+        )
         await models.Orders.create(
             id=msg["i"],
             pair=pair,
@@ -217,8 +221,12 @@ class Watcher:
         entries = await self.strat_compute_entry(pairs)
         for entry in entries:
             try:
-                log_order("info", f"Placing BUY order: {entry['pair']} qty={entry['quantity']:.8g} @ {entry['target_price']:.8g} (current: {entry['current_price']:.8g})",
-                         pair=entry['pair'], amount=entry['quantity'])
+                log_order(
+                    "info",
+                    f"Placing BUY order: {entry['pair']} qty={entry['quantity']:.8g} @ {entry['target_price']:.8g} (current: {entry['current_price']:.8g})",
+                    pair=entry["pair"],
+                    amount=entry["quantity"],
+                )
                 self.client.new_order(
                     symbol=entry["pair"],
                     side="BUY",
@@ -230,7 +238,7 @@ class Watcher:
 
             except ClientError as e:
                 if e.error_code == -2010 and "insufficient balance" in e.error_message:
-                    log_order("warning", "Insufficient balance for strategy entry", pair=entry['pair'])
+                    log_order("warning", "Insufficient balance for strategy entry", pair=entry["pair"])
                     break
                 else:
                     log_api("error", f"Order refused: {e.error_message}", endpoint="new_order")
@@ -300,7 +308,9 @@ class Watcher:
             try:
                 self.client.cancel_open_orders(symbol=symbol)
             except ClientError as err:
-                log_api("error", f"Failed to cancel orders on {symbol}: {err.error_message}", endpoint="cancel_open_orders")
+                log_api(
+                    "error", f"Failed to cancel orders on {symbol}: {err.error_message}", endpoint="cancel_open_orders"
+                )
             if asset := await models.Assets.get_or_none(id=symbol):
                 try:
                     self.client.new_order(
@@ -309,7 +319,12 @@ class Watcher:
                         type="MARKET",
                         quantity=asset.token_quantity,
                     )
-                    log_order("warning", "Emergency sell executed for delisted asset", pair=symbol, amount=float(asset.token_quantity))
+                    log_order(
+                        "warning",
+                        "Emergency sell executed for delisted asset",
+                        pair=symbol,
+                        amount=float(asset.token_quantity),
+                    )
                 except ClientError as err:
                     log_api("error", f"Failed to emergency sell {symbol}: {err.error_message}", endpoint="new_order")
 

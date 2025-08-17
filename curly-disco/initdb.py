@@ -164,7 +164,9 @@ class InitDB:
                     # which means we have dust to collect
                     if index == 0:
                         resp = self.client.transfer_dust([pair.replace("USDT", "")])
-                        log_api("info", f"Dust transfer result: {resp.get('transferResult', '')}", endpoint="transfer_dust")
+                        log_api(
+                            "info", f"Dust transfer result: {resp.get('transferResult', '')}", endpoint="transfer_dust"
+                        )
                         return
                     # we reach last sell operation and we can guess we have all BUY orders
                     else:
