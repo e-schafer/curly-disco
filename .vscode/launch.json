@@ -5,7 +5,7 @@
             "name": "Python: main.py",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/main.py",
+            "program": "${workspaceFolder}/curly-disco/main.py",
             "console": "integratedTerminal",
             "justMyCode": true
         }
