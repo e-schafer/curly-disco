@@ -1,10 +1,8 @@
-import asyncio
-
 import models
 from binance.error import ClientError
 from cex import ExchangeInterface
 from initdb import InitDB
-from nicegui import ui
+from nicegui import run, ui
 from utils.logger import TradingLogger
 from watcher import Watcher
 
@@ -71,13 +69,15 @@ class CommandView(ExchangeInterface):
             return False
 
     async def __sync_market(self):
-        notif = ui.notification(timeout=None)
-        notif.message = "Synchronizing market..."
-        notif.spinner = True
-        await InitDB(spot=self.client).init_market()
-        notif.spinner = False
-        notif.message = "Synchronization done."
-        notif.dismiss()
+        with ui.notification("Synchronizing market...", spinner=True, timeout=None) as notif:
+            try:
+                await run.io_bound(InitDB(spot=self.client).init_market)
+                notif.spinner = False
+                notif.message = "Synchronization done."
+            except Exception as e:
+                notif.spinner = False
+                notif.message = f"Synchronization failed: {e}"
+                TradingLogger().logger.error(f"Market sync error: {e}")
 
     async def __sync_buy_strategy(self):
         notif = ui.notification(timeout=None)

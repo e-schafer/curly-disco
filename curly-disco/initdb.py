@@ -103,9 +103,9 @@ class InitDB:
     async def check_market_table(self):
         nbr = await models.Assets.all().count()
         if nbr == 0:
-            await self.init_market()
+            self.init_market()
 
-    async def init_market(self):
+    def init_market(self):
         """_summary_"""
 
         def extract_filters(filters: list[dict]):
@@ -146,8 +146,8 @@ class InitDB:
                 data,
             )
         )
-        await models.Market.all().delete()
-        await models.Market.bulk_create(data, on_conflict=["symbol"], ignore_conflicts=True)
+        models.Market.all().delete()
+        models.Market.bulk_create(data, on_conflict=["symbol"], ignore_conflicts=True)
 
     async def init_assets(self):
         async def compute_asset(pair: str):
@@ -175,7 +175,6 @@ class InitDB:
                 quote_quantity += float(order.get("cummulativeQuoteQty", 0))
                 opened_at = datetime.fromtimestamp(order["time"] / 1000)
 
-            pp(f"{pair} {token_quantity} {quote_quantity} {opened_at}")
             current_unit_price = float((self.client.ticker_price(pair))["price"])
             await models.Assets.create(
                 id=pair,
