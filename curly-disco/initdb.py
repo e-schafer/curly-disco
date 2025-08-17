@@ -204,16 +204,27 @@ class InitDB:
             await compute_asset(pair)
 
     async def init_settings(self):
-        settings = [
-            models.Settings(key=models.Settings.Keys.SELL_GAINS_PERCENTAGE, value=20),
-            models.Settings(key=models.Settings.Keys.SELL_TRAILING_STOP, value=5),
-            models.Settings(key=models.Settings.Keys.WEEKLY_DEVIATION_PERCENTAGE, value=69),
-            models.Settings(key=models.Settings.Keys.BUY_AMOUNT, value=20),
-            models.Settings(key=models.Settings.Keys.MITRAILLE_PERCENTAGE, value=20),
-            models.Settings(key=models.Settings.Keys.MITRAILLE_QUANTITY, value=20),
-            models.Settings(key=models.Settings.Keys.LESSPER_DEFAULT, value=20),
+        """Initialize settings with default values if they don't exist"""
+        default_settings = {
+            models.Settings.Keys.SELL_GAINS_PERCENTAGE: 20,
+            models.Settings.Keys.SELL_TRAILING_STOP: 5,
+            models.Settings.Keys.WEEKLY_DEVIATION_PERCENTAGE: 69,
+            models.Settings.Keys.BUY_AMOUNT: 20,
+            models.Settings.Keys.MITRAILLE_PERCENTAGE: 20,
+            models.Settings.Keys.MITRAILLE_QUANTITY: 20,
+            models.Settings.Keys.LESSPER_DEFAULT: 20,
+        }
+
+        # Check existing settings to avoid conflicts
+        existing_keys = set(await models.Settings.all().values_list("key", flat=True))
+
+        settings_to_create = [
+            models.Settings(key=key, value=value) for key, value in default_settings.items() if key not in existing_keys
         ]
-        await models.Settings.bulk_create(settings, on_conflict=["key"], ignore_conflicts=True)
+
+        if settings_to_create:
+            await models.Settings.bulk_create(settings_to_create)
+            log_api("info", f"Created {len(settings_to_create)} default settings", endpoint="init_settings")
 
     async def first_run(self):
         # await self.init_settings()
