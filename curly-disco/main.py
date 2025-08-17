@@ -1,4 +1,5 @@
 import os
+import traceback
 from hashlib import sha256
 from typing import Optional
 
@@ -17,7 +18,7 @@ from views.orders import OrdersView, TradesView
 from views.settings import SettingsView
 from watcher import Watcher
 
-VERSION = "0.4.0"
+VERSION = "0.5.0"
 AUTHENTICATION = os.environ["AUTHENTICATION_HASH"]
 BINANCE_API_KEY = os.environ["BINANCE_API_KEY"]
 BINANCE_API_SECRET = os.environ["BINANCE_API_SECRET"]
@@ -78,12 +79,21 @@ async def startup():
 
 @app.on_exception
 async def error(error: Exception):
-    pass
-    # ui.notify(
-    #     "Website Exception: \n" f"{traceback.format_exception(error)} \n",
-    #     multi_line=True,
-    #     classes="multi-line-notification",
-    # )
+    error_type = type(error).__name__
+    error_message = str(error)
+    error_traceback = "".join(traceback.format_exception(type(error), error, error.__traceback__))
+
+    # Log l'erreur complète
+    logger.logger.error(f"❌ Exception non gérée: {error_type}: {error_message}\n{error_traceback}")
+
+    # Notification utilisateur simplifiée
+    ui.notify(
+        f"Erreur: {error_type}\n{error_message}",
+        type="negative",
+        multi_line=True,
+        timeout=10000,
+        classes="multi-line-notification",
+    )
 
 
 @app.on_shutdown
@@ -107,7 +117,7 @@ async def index():
             ui.tab("Orders")
             ui.tab("Settings")
         with ui.row().classes("items-center absolute-right"):
-            ui.label(f"pomato {VERSION}")
+            ui.label(f"Roboto {VERSION}")
             ui.button(on_click=logout, icon="logout").props("outline round")
     with ui.tab_panels(tabs, value="Assets", keep_alive=False):
         with ui.tab_panel("Home"):
@@ -146,5 +156,4 @@ def login() -> Optional[RedirectResponse]:
     return None
 
 
-ui.dark_mode().enable()
-ui.run(reload=False, storage_secret="THIS_NEEDS_TO_BE_CHANGED")
+ui.run(reload=False, dark=True, storage_secret="THIS_NEEDS_TO_BE_CHANGED")

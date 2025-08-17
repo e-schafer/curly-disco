@@ -116,11 +116,14 @@ class MarketView(ExchangeInterface):
                     ui.label(f"↓ {round(btc_variation,2)}%").classes("text-negative")
 
     async def __render_next_delist(self):
-        data = self.client.delist_schedule_symbols()
-        ui.label("Next delist")
-        for delist in data:
-            date = datetime.fromtimestamp(delist["delistTime"] / 1000)
-            ui.label(f"{date.date()} -- {delist['symbols']}")
+        try:
+            data = self.client.delist_schedule_symbols()
+            ui.label("Next delist")
+            for delist in data:
+                date = datetime.fromtimestamp(delist["delistTime"] / 1000)
+                ui.label(f"{date.date()} -- {delist['symbols']}")
+        except Exception as e:
+            ui.label(f"Error fetching delist schedule: {str(e)}").classes("text-negative")
 
     async def render(self):
         # coinmarketcap_data = await self.__get_market_data()
