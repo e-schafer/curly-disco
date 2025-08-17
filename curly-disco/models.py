@@ -119,9 +119,9 @@ class Market(models.Model):
     And will be used to blacklist some pairs that we dont want to trade on.
     """
 
-    pair = fields.CharField(max_length=20, pk=True)
-    symbol = fields.CharField(max_length=10)
-    quote_symbol = fields.CharField(max_length=10)
+    pair = fields.CharField(max_length=30, pk=True)
+    symbol = fields.CharField(max_length=15)
+    quote_symbol = fields.CharField(max_length=15)
     min_price = fields.DecimalField(10, 10)
     tick_price = fields.DecimalField(10, 10)
     min_quantity = fields.DecimalField(10, 10)
