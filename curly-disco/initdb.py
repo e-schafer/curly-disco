@@ -1,17 +1,15 @@
 import os
 from datetime import datetime
 from pprint import pp
+from typing import Optional
 
 import models
 from binance.spot import Spot
 
 
 class InitDB:
-    def __init__(self, api_key, api_secret):
-        self.client = Spot(
-            api_key,
-            api_secret,
-        )
+    def __init__(self, api_key=None, api_secret=None, spot: Optional[Spot] = None):
+        self.client = spot if spot else Spot(api_key, api_secret)
 
     async def init_orders_and_trades(self, selected_pairs: list[str] = []):
         await models.Orders.all().delete()
@@ -50,12 +48,12 @@ class InitDB:
             print(f"Orders found {len(data)} for {pair}") if data else None
             await models.Orders.bulk_create(data, on_conflict=["id"], ignore_conflicts=True)
             await models.Trades.bulk_create(
-                objects=await self.__init_trades_history(data),
+                objects=await self.__init_token_trades(data),
                 on_conflict=["pair", "opened_at", "closed_at"],
                 ignore_conflicts=True,
             )
 
-    async def __init_trades_history(self, orders: list[models.Orders]) -> list[models.Trades]:
+    async def __init_token_trades(self, orders: list[models.Orders]) -> list[models.Trades]:
         """_summary_
 
         Args:
@@ -100,6 +98,11 @@ class InitDB:
                 opened_at = datetime(1970, 1, 1)
         return trades
 
+    async def check_market_table(self):
+        nbr = await models.Assets.all().count()
+        if nbr == 0:
+            await self.init_market()
+
     async def init_market(self):
         """_summary_"""
 
@@ -113,7 +116,23 @@ class InitDB:
                 "tick_quantity": float(filterQuantity["stepSize"]),
             }
 
-        await models.Market.all().delete()
+        def is_history_long_enough(pair: str):
+            klines = self.client.klines(symbol=pair, interval="1M", limit="7")
+            return True if len(klines) >= 6 else False
+
+        data = list(
+            filter(
+                lambda x: x["quoteAsset"] == "USDT"
+                and x["baseAsset"] not in ("USDT", "TUSD", "USDC", "USDP")
+                and x["allowTrailingStop"]
+                and x["isSpotTradingAllowed"]
+                and x["status"] == "TRADING",
+                self.client.exchange_info(permissions=["SPOT"]).get("symbols"),
+            )
+        )
+        print(f"Market -- {len(data)} pairs available")
+        data = list(filter(lambda z: is_history_long_enough(z["symbol"]), data))
+        print(f"Market -- {len(data)} pairs accepted")
         data = list(
             map(
                 lambda y: models.Market(
@@ -122,41 +141,32 @@ class InitDB:
                     quote_symbol=y["quoteAsset"],
                     **extract_filters(y["filters"]),
                 ),
-                filter(
-                    lambda x: x["quoteAsset"] == "USDT"
-                    and x["baseAsset"] not in ("USDT", "TUSD", "USDC", "USDP")
-                    and x["allowTrailingStop"]
-                    and x["isSpotTradingAllowed"]
-                    and x["status"] == "TRADING",
-                    self.client.exchange_info(permissions=["SPOT"]).get("symbols"),
-                ),
+                data,
             )
         )
-        print(f"Market found {len(data)} pairs")
+        await models.Market.all().delete()
         await models.Market.bulk_create(data, on_conflict=["symbol"], ignore_conflicts=True)
 
     async def init_assets(self):
-        await models.Assets.all().delete()
-        pairs = list(
-            map(
-                lambda y: f"{y['asset']}USDT",
-                filter(
-                    lambda x: x["asset"] not in ("USDT", "BNB"),
-                    self.client.account(omitZeroBalances="true").get("balances"),
-                ),
-            )
-        )
-        pp(pairs)
-        for pair in pairs:
+        async def compute_asset(pair: str):
             print(f"Fetching open trades for {pair}")
-            orders = list(filter(lambda x: x["status"] == "FILLED", self.client.get_orders(symbol=pair)))
+            data = self.client.get_orders(symbol=pair)
+            orders = list(filter(lambda x: x["status"] == "FILLED", data))
             orders.sort(key=lambda x: x["time"], reverse=True)
             token_quantity: float = 0.0
             quote_quantity: float = 0.0
             opened_at: datetime = datetime(1970, 1, 1)
-            for order in orders:
+            for index, order in enumerate(orders):
                 if order["side"] == "SELL":
-                    break
+                    # in this case we have asset but the last order is SELL
+                    # which means we have dust to collect
+                    if index == 0:
+                        resp = self.client.transfer_dust([pair.replace("USDT", "")])
+                        print(resp.get("transferResult", ""))
+                        return
+                    # we reach last sell operation and we can guess we have all BUY orders
+                    else:
+                        break
                 token_quantity += float(order.get("origQty", 0))
                 quote_quantity += float(order.get("cummulativeQuoteQty", 0))
                 opened_at = datetime.fromtimestamp(order["time"] / 1000)
@@ -175,6 +185,20 @@ class InitDB:
                 opened_at=opened_at,
             )
 
+        await models.Assets.all().delete()
+        pairs = list(
+            map(
+                lambda y: f"{y['asset']}USDT",
+                filter(
+                    lambda x: x["asset"] not in ("USDT", "BNB"),
+                    self.client.account(omitZeroBalances="true").get("balances"),
+                ),
+            )
+        )
+        pp(pairs)
+        for pair in pairs:
+            await compute_asset(pair)
+
     async def init_settings(self):
         settings = [
             models.Settings(key=models.Settings.Keys.SELL_GAINS_PERCENTAGE, value=20),
@@ -188,9 +212,9 @@ class InitDB:
         await models.Settings.bulk_create(settings, on_conflict=["key"], ignore_conflicts=True)
 
     async def first_run(self):
-        await self.init_settings()
-        await self.init_market()
-        await self.init_orders_and_trades()
+        # await self.init_settings()
+        # await self.init_market()
+        # await self.init_orders_and_trades()
         await self.init_assets()
 
 

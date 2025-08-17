@@ -1,8 +1,10 @@
 import asyncio
+import json
 import os
 from datetime import datetime
 from itertools import chain
 from statistics import mean
+from typing import Optional
 
 import models
 from binance.error import ClientError
@@ -13,8 +15,8 @@ from fastapi_utilities import repeat_at
 
 
 class Watcher:
-    def __init__(self, api_key, api_secret):
-        self.client: Spot = Spot(api_key, api_secret)
+    def __init__(self, api_key=None, api_secret=None, spot: Optional[Spot] = None):
+        self.client = spot if spot else Spot(api_key, api_secret)
         self.ws_client = SpotWebsocketStreamClient(on_message=self.on_message)
 
     def start_watch(self):
@@ -24,33 +26,34 @@ class Watcher:
     def stop_watch(self):
         self.ws_client.stop()
 
-    async def on_message(self, _, msg):
-        print(f"on_message: {msg}")
-        print(f"on_message _: {_}")
-        match msg["e"]:
+    def on_message(self, _, msg: str):
+        event = json.loads(msg)
+        match event.get("e", ""):
             case "executionReport":
-                await self.handle_execution_report(msg)
+                asyncio.run(self.handle_execution_report(event))
             case "outboundAccountInfo":
                 print(msg)
             case _:
                 pass
+        return True
 
-    async def handle_execution_report(self, msg):
+    async def handle_execution_report(self, msg: dict):
         pair = msg["s"]
         token_qty = float(msg["q"])
-        quote_qty = float(msg["p"])
-        base_unit_price = float(msg["p"])
+        quote_qty = float(msg["Z"])
+        base_unit_price = float(msg["L"])
         if msg["X"] != "FILLED":
             return
-        asset = await models.Assets().get(id=pair)
+        print(f"on_message: {msg}")
+        asset = await models.Assets().get_or_none(id=pair)
         print(f"Order: {msg['i']} {msg['S']} {pair} {token_qty} {quote_qty} {base_unit_price}")
         await models.Orders.create(
             id=msg["i"],
             pair=pair,
             side=msg["S"],
             base_unit_price=base_unit_price,
-            token_quantity=msg["q"],
-            quote_quantity=msg["p"] * msg["q"],
+            token_quantity=float(msg["q"]),
+            quote_quantity=float(msg["p"]) * float(msg["q"]),
             timestamp=datetime.fromtimestamp(msg["T"] / 1000),
         )
 
@@ -72,7 +75,7 @@ class Watcher:
                     market_value=token_qty * quote_qty,
                     opened_at=datetime.fromtimestamp(msg["T"] / 1000),
                 )
-                # await self.mitrailles(pair, base_unit_price)
+                await self.mitrailles(pair, base_unit_price)
 
         elif msg["S"] == "SELL":
             if asset:
@@ -86,17 +89,22 @@ class Watcher:
                         }
                     )
                 await models.Trades.create(
+                    id=msg["i"],
                     pair=pair,
-                    token_quantity=token_qty,
-                    quote_quantity=quote_qty,
-                    gains=quote_qty - float(asset.quote_quantity),
-                    gains_percentage=((quote_qty - float(asset.quote_quantity)) / float(asset.quote_quantity)) * 100,
                     opened_at=asset.opened_at,
                     closed_at=datetime.fromtimestamp(msg["T"] / 1000),
+                    token_quantity=token_qty,
+                    buy_unit_price=asset.buy_unit_price,
+                    buy_quote_quantity=asset.quote_quantity,
+                    sell_unit_price=base_unit_price,
+                    sell_quote_quantity=quote_qty,
+                    gains=quote_qty - float(asset.quote_quantity),
+                    gains_percentage=((quote_qty - float(asset.quote_quantity)) / float(asset.quote_quantity)) * 100,
                 )
             pass
         else:
             pass
+        return True
 
     async def mitrailles(self, pair: str, start_price: float):
         mitraille_range = float((await models.Settings.get(key=models.Settings.Keys.MITRAILLE_PERCENTAGE)).value) / 100
@@ -313,6 +321,6 @@ if __name__ == "__main__":
     data = asyncio.run(watcher.strat_compute_entry())
     with open("data.json", "w") as f:
         for d in data:
-            f.write(str(d))
+            f.write(str(d) + "\n")
     watcher.ws_client.stop()
     asyncio.run(DB.close())

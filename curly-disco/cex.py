@@ -34,8 +34,8 @@ class ExchangeInterface(ABC):
         }
         asset = (
             await models.Assets.annotate(
-                crypto_bought=tf.Sum("quote_quantity"),
-                market_value=tf.Sum("market_value"),
+                crypto_bought=tf.Coalesce(tf.Sum("quote_quantity"), 0.0),
+                market_value=tf.Coalesce(tf.Sum("market_value"), 0.0),
             )
             .first()
             .values()

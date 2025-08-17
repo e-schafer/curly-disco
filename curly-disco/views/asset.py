@@ -106,7 +106,10 @@ class AssetView(ExchangeInterface):
                 "quantity": asset["token_quantity"],
             }
             if type == "LIMIT":
-                payload["price"] = asset["buy_unit_price"]
+                asset_config = await models.Market().get(pair=asset["id"])
+                payload["price"] = format(
+                    (asset["buy_unit_price"] // float(asset_config.tick_price)) * float(asset_config.tick_price), "g"
+                )
                 payload["timeInForce"] = "GTC"
             try:
                 self.client.new_order(**payload)
@@ -118,7 +121,7 @@ class AssetView(ExchangeInterface):
     async def render(self):
         with ui.row(align_items="stretch"):
             ui.button("Refresh", on_click=self.asset_view.refresh)
-            ui.button("Synchronisation", on_click=self.init_assets, color="green")
+            ui.button("Synchronize", on_click=self.init_assets, color="green")
             ui.button("Sell market", on_click=lambda: self.__sell_selected_assets(type="MARKET"), color="red")
             ui.button("Sell break even", on_click=lambda: self.__sell_selected_assets(type="LIMIT"), color="red")
         await self.asset_view()

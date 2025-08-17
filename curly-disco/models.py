@@ -1,7 +1,5 @@
-import datetime
 from enum import StrEnum
 
-from attr import dataclass
 from tortoise import fields, models
 
 FORMAT_DATETIME = """val => date.formatDate(val, 'DD-MM-YYYY')"""
