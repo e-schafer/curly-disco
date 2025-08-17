@@ -68,7 +68,7 @@ class TradingLogger:
     def _setup_logger(self):
         """Configure le logger principal"""
         # Créer le répertoire de logs
-        log_dir = Path(__file__).parent.parent / "logs"
+        log_dir = Path(__file__).parent.parent.parent / "logs"
         log_dir.mkdir(exist_ok=True)
 
         # Logger principal

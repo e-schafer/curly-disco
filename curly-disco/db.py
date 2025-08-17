@@ -1,4 +1,4 @@
-import os
+from pathlib import Path
 
 from tortoise import Tortoise
 
@@ -6,7 +6,10 @@ from tortoise import Tortoise
 class DB:
     @staticmethod
     async def init():
-        await Tortoise.init(db_url=os.environ["DB_PATH"], modules={"models": ["models"]})
+        db_dir = Path(__file__).parent.parent / "data"
+        db_dir.mkdir(exist_ok=True)
+        db_url = str("sqlite://" + str(db_dir) + "/db.sqlite3")
+        await Tortoise.init(db_url=db_url, modules={"models": ["models"]})
         await Tortoise.generate_schemas()
 
     @staticmethod
