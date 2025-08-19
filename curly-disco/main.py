@@ -22,10 +22,10 @@ VERSION = "0.5.0"
 AUTHENTICATION = os.environ["AUTHENTICATION_HASH"]
 BINANCE_API_KEY = os.environ["BINANCE_API_KEY"]
 BINANCE_API_SECRET = os.environ["BINANCE_API_SECRET"]
+STORAGE_SECRET = os.environ["STORAGE_SECRET"]
 SKIP_INIT_HISTORIC = True if os.getenv("SKIP_INIT_HISTORIC", "").lower() == "true" else False
 SKIP_INIT_ENTRIES = True if os.getenv("SKIP_INIT_ENTRIES", "").lower() == "true" else False
 DISABLE_WATCHER = True if os.getenv("DISABLE_WATCHER", "").lower() == "true" else False
-
 # Initialiser le système de logging
 logger = TradingLogger()
 
@@ -156,4 +156,4 @@ def login() -> Optional[RedirectResponse]:
     return None
 
 
-ui.run(reload=False, dark=True, storage_secret="THIS_NEEDS_TO_BE_CHANGED")
+ui.run(reload=False, dark=True, storage_secret=STORAGE_SECRET)
