@@ -15,6 +15,21 @@ from fastapi_utilities import repeat_at
 from utils.logger import log_api, log_order, log_strategy, log_websocket
 
 
+class TradingConstants:
+    MINIMUM_BALANCE_THRESHOLD = 0.0000001
+    BINANCE_INSUFFICIENT_BALANCE_ERROR = -2010
+    KLINES_HISTORY_MINIMUM = 7
+    BITCOIN_VARIATION_THRESHOLDS = {
+        -2.5: 2.5,
+        -4.5: 5,
+        -7.5: 10,
+        -9.5: 15,
+        -13: 20,
+        -16: 25,
+        -20: 30,
+    }
+
+
 class Watcher:
     def __init__(self, api_key=None, api_secret=None, spot: Optional[Spot] = None):
         self.client = spot if spot else Spot(api_key, api_secret)
@@ -85,7 +100,7 @@ class Watcher:
 
         elif msg["S"] == "SELL":
             if asset:
-                if float(asset.token_quantity) - token_qty < 0.0000001:
+                if float(asset.token_quantity) - token_qty < TradingConstants.MINIMUM_BALANCE_THRESHOLD:
                     await asset.delete()
                 else:
                     asset.update_from_dict(
@@ -137,7 +152,10 @@ class Watcher:
                 )
 
             except ClientError as e:
-                if e.error_code == -2010 and "insufficient balance" in e.error_message:
+                if (
+                    e.error_code == TradingConstants.BINANCE_INSUFFICIENT_BALANCE_ERROR
+                    and "insufficient balance" in e.error_message
+                ):
                     log_order("warning", "Insufficient balance for mitrailles order", pair=pair)
                     break
                 else:
@@ -147,22 +165,10 @@ class Watcher:
         lessper = float((await models.Settings.get(key=models.Settings.Keys.LESSPER_DEFAULT)).value)
         bitcoin_variation = float(self.client.ticker_24hr(symbol="BTCUSDT")["priceChangePercent"])
         log_strategy("info", f"Bitcoin variation: {bitcoin_variation}%")
-        if bitcoin_variation >= -2.5:
-            lessper += 2.5
-        elif bitcoin_variation >= -4.5:
-            lessper += 5
-        elif bitcoin_variation >= -7.5:
-            lessper += 10
-        elif bitcoin_variation >= -9.5:
-            lessper += 15
-        elif bitcoin_variation >= -13:
-            lessper += 20
-        elif bitcoin_variation >= -16:
-            lessper += 25
-        elif bitcoin_variation >= -20:
-            lessper += 30
-        else:
-            lessper += 35
+        for threshold, adjustment in TradingConstants.BITCOIN_VARIATION_THRESHOLDS.items():
+            if bitcoin_variation >= threshold:
+                lessper += adjustment
+                break
         log_strategy("info", f"Computed lessper: {lessper}%")
         return lessper / 100
 
@@ -174,6 +180,36 @@ class Watcher:
                 self.client.cancel_open_orders(symbol=order["symbol"])
 
     async def strat_compute_entry(self, _pairs: list[str] = []) -> list[dict]:
+        """
+        Computes entry positions for trading pairs based on price volatility analysis.
+
+        This method analyzes trading pairs to identify potential entry opportunities by:
+        1. Calculating 7-day moving averages from daily price data
+        2. Computing price volatility (delta) over the period
+        3. Filtering pairs below a specified volatility threshold
+        4. Calculating target prices and quantities for potential positions
+
+        Args:
+            _pairs (list[str], optional): Specific trading pairs to analyze. If empty,
+                analyzes all non-blacklisted pairs from the market. Defaults to [].
+
+        Returns:
+            list[dict]: List of potential entry positions sorted by distance from target price.
+                Each position contains:
+                - pair (str): Trading pair symbol
+                - delta (float): Price volatility percentage over 7 days
+                - mean (float): Average price over the analysis period
+                - current_price (float): Latest closing price
+                - target_price (float): Calculated entry target price
+                - far (float): Percentage distance from current to target price
+                - quantity (float): Calculated position size based on buy amount
+
+        Note:
+            - Excludes pairs already present in the assets table
+            - Requires at least 7 days of price data per pair
+            - Uses weekly deviation percentage and buy amount from settings
+            - Target prices are adjusted to match tick size requirements
+        """
         log_strategy("info", "Computing entry positions")
         threshold = float((await models.Settings.get(key=models.Settings.Keys.WEEKLY_DEVIATION_PERCENTAGE)).value) / 100
         buy_amount = float((await models.Settings.get(key=models.Settings.Keys.BUY_AMOUNT)).value)
@@ -188,7 +224,7 @@ class Watcher:
         for index, pair in enumerate(pairs):
             log_strategy("debug", f"Computing entry for {pair} ({index + 1}/{len(pairs)})", pair=pair)
             ticks = self.client.ui_klines(symbol=pair, interval="1d", limit=8)
-            if len(ticks) < 7:
+            if len(ticks) < TradingConstants.KLINES_HISTORY_MINIMUM:
                 continue
             moving_average = list(map(lambda x: (float(x[2]) + float(x[3])) / 2, ticks[:-1]))
             moving_delta = (max(moving_average) / min(moving_average)) - 1
@@ -216,6 +252,32 @@ class Watcher:
         asyncio.run(self.strat_loop_compute_entry())
 
     async def strat_loop_compute_entry(self, pairs: list[str] = []):
+        """
+        Executes the strategy loop for computing and placing entry orders.
+
+        This method performs the following operations:
+        1. Logs the start of the strategy loop with timestamp
+        2. Cancels any existing buy orders
+        3. Computes entry points for specified trading pairs
+        4. Places limit buy orders for each computed entry
+
+        Args:
+            pairs (list[str], optional): List of trading pairs to analyze.
+                                        Defaults to empty list.
+
+        Returns:
+            None
+
+        Raises:
+            ClientError: When order placement fails due to API errors such as
+                        insufficient balance (-2010) or other order rejection reasons.
+
+        Note:
+            - Uses GTC (Good Till Canceled) time in force for limit orders
+            - Rounds quantity and price to 8 decimal places
+            - Logs order placement attempts and errors
+            - Breaks execution on insufficient balance to prevent further failures
+        """
         log_strategy("info", f"Strategy loop started - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         await self.cancel_buy_orders()
         entries = await self.strat_compute_entry(pairs)
@@ -237,7 +299,10 @@ class Watcher:
                 )
 
             except ClientError as e:
-                if e.error_code == -2010 and "insufficient balance" in e.error_message:
+                if (
+                    e.error_code == TradingConstants.BINANCE_INSUFFICIENT_BALANCE_ERROR
+                    and "insufficient balance" in e.error_message
+                ):
                     log_order("warning", "Insufficient balance for strategy entry", pair=entry["pair"])
                     break
                 else:
