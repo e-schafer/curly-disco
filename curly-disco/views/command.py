@@ -1,3 +1,5 @@
+from time import sleep
+
 import models
 from binance.error import ClientError
 from cex import ExchangeInterface
@@ -78,6 +80,8 @@ class CommandView(ExchangeInterface):
                 notif.spinner = False
                 notif.message = f"Synchronization failed: {e}"
                 TradingLogger().logger.error(f"Market sync error: {e}")
+            sleep(3)
+            notif.dismiss()
 
     async def __sync_buy_strategy(self):
         notif = ui.notification(timeout=None)
