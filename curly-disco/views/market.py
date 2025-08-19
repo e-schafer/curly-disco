@@ -126,15 +126,15 @@ class MarketView(ExchangeInterface):
             ui.label(f"Error fetching delist schedule: {str(e)}").classes("text-negative")
 
     async def render(self):
-        # coinmarketcap_data = await self.__get_market_data()
+        coinmarketcap_data = await self.__get_market_data()
         with ui.card().props("flat bordered"):
             await self.__render_next_delist()
 
-        # with ui.row():
-        #     await self.__render_bitcoin_dominance(coinmarketcap_data)
-        #     await self.__render_prices()
-        #     await self.__render_market_cap(coinmarketcap_data)
+        with ui.row():
+            await self.__render_bitcoin_dominance(coinmarketcap_data)
+            await self.__render_prices()
+            await self.__render_market_cap(coinmarketcap_data)
 
-        # with ui.card().props("flat bordered"):
-        #     ui.label("Fear and Greed Index")
-        #     await self.__render_fear_greed_index()
+        with ui.card().props("flat bordered"):
+            ui.label("Fear and Greed Index")
+            await self.__render_fear_greed_index()
